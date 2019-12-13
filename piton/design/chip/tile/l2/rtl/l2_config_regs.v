@@ -240,7 +240,7 @@ begin
     csm_en = ctrl_reg_f[0];
     error_status_en = ctrl_reg_f[1];
     l2_access_counter_inc_en = ctrl_reg_f[2];
-    l2_miss_counter_inc_en = ctrl_reg_f[3];
+    l2_miss_counter_inc_en = 1'b1;//ctrl_reg_f[3];
     smt_base_addr = ctrl_reg_f[`L2_SMT_BASE_ADDR_WIDTH+32-1 : 32];
 end
 

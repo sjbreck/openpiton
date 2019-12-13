@@ -234,7 +234,7 @@ endtask
 //     endcase
 // end
 // endtask
-
+/*
 task decode_s3mshr_op;
 input [`L15_S3_MESI_OP_WIDTH-1:0] op;
 begin
@@ -254,7 +254,7 @@ begin
     endcase
 end
 endtask
-
+*/
 task decode_pcx_op;
 input [`PCX_REQTYPE_WIDTH-1:0] op;
 input [`L15_AMO_OP_WIDTH-1:0] amo_op;
@@ -391,6 +391,7 @@ begin
                                 `L15_PIPE0.pcxdecoder_l15_address, `L15_PIPE0.pcxdecoder_l15_nc, `L15_PIPE0.pcxdecoder_l15_size, `L15_PIPE0.pcxdecoder_l15_invalidate_cacheline,
                                 `L15_PIPE0.pcxdecoder_l15_prefetch, `L15_PIPE0.pcxdecoder_l15_blockstore, `L15_PIPE0.pcxdecoder_l15_blockinitstore, `L15_PIPE0.pcxdecoder_l15_l1rplway);
         $display("   Data: 0x%x", `L15_PIPE0.pcxdecoder_l15_data);
+
         if (`L15_PIPE0.pcxdecoder_l15_csm_data[`TLB_CSM_STATE] == `TLB_CSM_STATE_LOCAL)
         begin
             $display("   CSM HDID: %d, HD_SIZE: %d, SDID: %d, LSID: %d", `L15_PIPE0.pcxdecoder_l15_csm_data[`TLB_CSM_HDID], `L15_PIPE0.pcxdecoder_l15_csm_data[`TLB_CSM_HD_SIZE],
@@ -584,7 +585,7 @@ begin
         $display("   Data1: 0x%x", `L15_TOP0.noc1encoder.noc1buffer_noc1encoder_req_data_1);
         $display("   Destination X: %d Y: %d", `L15_TOP0.noc1encoder.msg_dest_l2_xpos, `L15_TOP0.noc1encoder.msg_dest_l2_ypos);
     end
-
+/*
     if (`L15_TOP0.noc3encoder.noc3encoder_noc3out_val && `L15_TOP0.noc3encoder.noc3encoder_l15_req_ack)
     begin
         noc3 = 0;
@@ -622,7 +623,9 @@ begin
         $display("   Data0: 0x%x", `L15_TOP0.noc3encoder.l15_noc3encoder_req_data_0);
         $display("   Data1: 0x%x", `L15_TOP0.noc3encoder.l15_noc3encoder_req_data_1);
     end
+*/
 
+/*
     do_print_stage_TILE0 = ((`L15_PIPE0.val_s1 && !`L15_PIPE0.stall_s1) || (`L15_PIPE0.val_s2 && !`L15_PIPE0.stall_s2) || (`L15_PIPE0.val_s3 && !`L15_PIPE0.stall_s3));
     if (do_print_stage_TILE0)
     begin
@@ -935,7 +938,10 @@ begin
         $display ("L15_MON_END");
         $display ("");
     end
+*/
 
+
+/*
 //CSM monitor
     if(`L15_TOP0.l15_csm.l15_csm_req_val_s2)
     begin
@@ -1190,7 +1196,7 @@ begin
             end
         end
     end
-
+*/
 // Monitor tags duplication error (bug #86)
     if (`L15_PIPE0.val_s2 && `L15_PIPE0.decoder_dtag_operation_s2 == `L15_DTAG_OP_READ)
     begin
