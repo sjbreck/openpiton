@@ -10,54 +10,62 @@
 // Description: Shift register
 //
 module plru #(
-    parameter WIDTH = 8
+    parameter WAYS = 8
 )(
-    input  logic                      clk_i,
-    input  logic                      rst_ni,
-    input  logic                      en_i,
-    output logic [WIDTH-1:0]          refill_way_oh,
-    output logic [$clog2(WIDTH)-1:0]  refill_way_bin
+    input  logic                      clk,
+    input  logic                      reset_n,
+    input  logic                      en,
+    input  logic [WAYS-1:0]          evictable_way,
+    output logic [$clog2(WAYS)-1:0]  evict_way_idx
 );
 
-    localparam LOG_WIDTH = $clog2(WIDTH);
-
+    localparam WAY_BITS = $clog2(WAYS);
+    
   ///////////////////////
-  // PLRU for shared tags
+  // PLRU for shared ways
   ///////////////////////
+  logic [WAY_BITS-1:0] eviction_candidate_way_index;
+  logic [WAY_BITS-1:0] unmasked_candidate_way_index;
+  logic [WAYS-1  -1:0] plru_tree_nxt;
+  logic [WAYS-1  -1:0] plru_tree_r;
+  assign evict_way_idx = |evictable_way ? eviction_candidate_way_index : unmasked_candidate_way_index;
+  genvar j,k;
   generate
-  for (j = TAG_BITS; j > 0; j--)
-    begin: evicted_stag_gen
-      if(j == TAG_BITS) begin : j_eq_stag_bits_gen
-        assign eviction_candidate_stag_index[j - 1] = !( |evictable_stag[0 +: TAGS/2] ) || ( |evictable_stag[L1_N_STAGS/2 +: L1_N_STAGS/2] && !stag_plru_tree_r[0] );
-      end else begin : j_neq_stag_bits_gen
-        assign eviction_candidate_stag_index[j - 1] = ( !( |evictable_stag[eviction_candidate_stag_index[TAG_BITS - 1 : j] * (1 << j)                  +: 1 << (j - 1)] ) ) ||
-                                                      (    |evictable_stag[eviction_candidate_stag_index[TAG_BITS - 1 : j] * (1 << j) + (1 << (j - 1)) +: 1 << (j - 1)] &&
-                                                      !stag_plru_tree_r[TAG_BITS'(eviction_candidate_stag_index[L1_N_STAG_BITS - 1 : j]) + L1_N_STAG_BITS'( L1_N_STAGS / (1 << j) - 1)] );
+  for (j = WAY_BITS; j > 0; j--)
+    begin: evicted_way_gen
+      if(j == WAY_BITS) begin : j_eq_way_bits_gen
+        assign eviction_candidate_way_index[j - 1] = !( |evictable_way[0 +: WAYS/2] ) || ( |evictable_way[WAYS/2 +: WAYS/2] && !plru_tree_r[0] );
+        assign unmasked_candidate_way_index[j - 1] = !plru_tree_r[0];
+      end else begin : j_neq_way_bits_gen
+        assign eviction_candidate_way_index[j - 1] = ( !( |evictable_way[eviction_candidate_way_index[WAY_BITS - 1 : j] * (1 << j)                  +: 1 << (j - 1)] ) ) ||
+                                                      (    |evictable_way[eviction_candidate_way_index[WAY_BITS - 1 : j] * (1 << j) + (1 << (j - 1)) +: 1 << (j - 1)] &&
+                                                      !plru_tree_r[WAY_BITS'(eviction_candidate_way_index[WAY_BITS - 1 : j]) + WAY_BITS'( WAYS / (1 << j) - 1)] );
+        assign unmasked_candidate_way_index[j - 1] = !plru_tree_r[WAY_BITS'(unmasked_candidate_way_index[WAY_BITS - 1 : j]) + WAY_BITS'( WAYS / (1 << j) - 1)];
+
       end
     end
   endgenerate
 
   generate
-  for (j = 0; j < TAG_BITS; j++) begin: stag_plru_tree_gen
-    for(k = 0; k < (1 << j); k++) begin: stag_plru_tree_level_gen
-      if((k == 0) && (j == 0)) begin : stag_k_and_j_eq_zero_gen
+  for (j = 0; j < WAY_BITS; j++) begin: plru_tree_gen
+    for(k = 0; k < (1 << j); k++) begin: plru_tree_level_gen
+      if((k == 0) && (j == 0)) begin : way_k_and_j_eq_zero_gen
         // if a high order way was unlocked, make the tree point to the low order ways
-        assign stag_plru_tree_nxt[0] = eviction_candidate_stag_index[TAG_BITS - 1];
-      end else begin : stag_k_or_j_neq_zero_gen
-        assign stag_plru_tree_nxt[(1 << j) + k - 1] = eviction_candidate_stag_index[TAG_BITS - 1 : L1_N_STAG_BITS - j] == k[j - 1 : 0] ?
-                                                      eviction_candidate_stag_index[TAG_BITS - 1 - j] :
-                                                      stag_plru_tree_r[(1 << j) + k - 1];
+        assign plru_tree_nxt[0] = evict_way_idx[WAY_BITS - 1];
+      end else begin : way_k_or_j_neq_zero_gen
+        assign plru_tree_nxt[(1 << j) + k - 1] = evict_way_idx[WAY_BITS - 1 : WAY_BITS - j] == k[j - 1 : 0] ?
+                                                      evict_way_idx[WAY_BITS - 1 - j] :
+                                                      plru_tree_r[(1 << j) + k - 1];
       end
     end
   end
   endgenerate
 
-  always_ff @(negedge reset_n or posedge clk) begin
-    if (!reset_n) begin
-      stag_plru_tree_r <= {TAGS-1{1'b0}};
-    end else if (en_i) begin
-      stag_plru_tree_r <= stag_plru_tree_nxt;
-    end
+  always_ff @(negedge reset_n or posedge clk)
+  if (!reset_n) begin
+    plru_tree_r <= {WAYS-1{1'b0}};
+  end else if (en) begin
+    plru_tree_r <= plru_tree_nxt;
   end
 
 

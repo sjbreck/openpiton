@@ -42,6 +42,7 @@ module wt_dcache_missunit #(
   input  logic [NumPorts-1:0][63:0]                  miss_wdata_i,
   input  logic [NumPorts-1:0][63:0]                  miss_paddr_i,
   input  logic [NumPorts-1:0][DCACHE_SET_ASSOC-1:0]  miss_vld_bits_i,
+  input  logic [NumPorts-1:0][DCACHE_SET_ASSOC-1:0]  miss_ever_hit_i,
   input  logic [NumPorts-1:0][2:0]                   miss_size_i,
   input  logic [NumPorts-1:0][CACHE_ID_WIDTH-1:0]    miss_id_i,          // used as transaction ID
   // signals that the request collided with a pending read
@@ -150,7 +151,7 @@ module wt_dcache_missunit #(
     .cnt_o   ( inv_way                         ),
     .empty_o ( all_ways_valid                  )
   );
-
+/*
   // generate random cacheline index
   lfsr_8bit #(
     .WIDTH ( ariane_pkg::DCACHE_SET_ASSOC )
@@ -161,6 +162,18 @@ module wt_dcache_missunit #(
     .refill_way_oh  (             ),
     .refill_way_bin ( rnd_way     )
   );
+*/
+
+  plru #(
+    .WAYS ( ariane_pkg::DCACHE_SET_ASSOC )
+  ) u_repl_policy (
+    .clk          ( clk_i       ),
+    .reset_n        ( rst_ni      ),
+    .en             ( update_lfsr ),
+    .evictable_way  ( miss_ever_hit_i[miss_port_idx]),
+    .evict_way_idx  ( rnd_way     )
+  );
+
   assign rep_way                = (all_ways_valid) ? rnd_way : inv_way; 
   assign repl_way               = (miss_paddr_i[miss_port_idx][23:12] == 12'd3) ? rep_way : 3'b0;
 

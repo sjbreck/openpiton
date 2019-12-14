@@ -44,6 +44,7 @@ module wt_dcache_mem #(
   input  logic  [NumPorts-1:0]                              rd_prio_i,          // 0: low prio, 1: high prio
   output logic  [NumPorts-1:0]                              rd_ack_o,
   output logic                [DCACHE_SET_ASSOC-1:0]        rd_vld_bits_o,
+  output logic                [DCACHE_SET_ASSOC-1:0]        rd_ever_hit_o,
   output logic                [DCACHE_SET_ASSOC-1:0]        rd_hit_oh_o,
   output logic                [63:0]                        rd_data_o,
 
@@ -86,6 +87,8 @@ module wt_dcache_mem #(
   logic                                                         vld_we;                       // valid bits write enable
   logic [DCACHE_SET_ASSOC-1:0]                                  vld_wdata;                    // valid bits to write
   logic [DCACHE_SET_ASSOC-1:0][DCACHE_TAG_WIDTH-1:0]            tag_rdata;                    // these are the tags coming from the tagmem
+  logic [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0]            hit_q;                         // whether the line was hit or not
+
   logic                       [DCACHE_CL_IDX_WIDTH-1:0]         vld_addr;                     // valid bit
 
   logic [$clog2(NumPorts)-1:0]                                  vld_sel_d, vld_sel_q;
@@ -124,9 +127,9 @@ module wt_dcache_mem #(
 
   assign vld_wdata  = wr_vld_bits_i;
   assign vld_addr   = (wr_cl_vld_i) ? wr_cl_idx_i   : rd_idx_i[vld_sel_d];
+  assign bank_idx_d = (wr_cl_vld_i) ? wr_cl_idx_i   : rd_idx_i[vld_sel_d];
   assign rd_tag     = rd_tag_i[vld_sel_q]; //delayed by one cycle
   assign bank_off_d = (wr_cl_vld_i) ? wr_cl_off_i   : rd_off_i[vld_sel_d];
-  assign bank_idx_d = (wr_cl_vld_i) ? wr_cl_idx_i   : rd_idx_i[vld_sel_d];
   assign vld_req    = (wr_cl_vld_i) ? wr_cl_we_i    : (rd_acked) ? '1 : '0;
 
 
@@ -273,6 +276,7 @@ module wt_dcache_mem #(
 
     assign tag_rdata[i]     = vld_tag_rdata[i][DCACHE_TAG_WIDTH-1:0];
     assign rd_vld_bits_o[i] = vld_tag_rdata[i][DCACHE_TAG_WIDTH];
+    assign rd_ever_hit_o[i] = hit_q[vld_addr][i];
 
     // Tag RAM
     sram #(
@@ -289,6 +293,17 @@ module wt_dcache_mem #(
       .be_i      ( '1                  ),
       .rdata_o   ( vld_tag_rdata[i]    )
     );
+
+    for (genvar j = 0; j < DCACHE_NUM_WORDS; j++) begin : gen_hit_bits
+      wire set_indexed = (j[DCACHE_CL_IDX_WIDTH-1:0] == vld_addr);
+      // Hit bits
+      always_ff @(negedge rst_ni or posedge clk_i)
+      if (!rst_ni) begin
+        hit_q[j][i] <= 1'b0;
+      end else begin
+        hit_q[j][i] <= rd_hit_oh_o[i] && set_indexed || hit_q[j][i] && !(vld_we && vld_req[i] && set_indexed);
+      end
+    end
   end
 
   always_ff @(posedge clk_i or negedge rst_ni) begin : p_regs
