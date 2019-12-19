@@ -63,6 +63,7 @@ module wt_dcache_wbuffer #(
   input  dcache_req_i_t                      req_port_i,
   output dcache_req_o_t                      req_port_o,
   // interface to miss handler
+  output logic [13:0]                        miss_signature_o,
   input  logic                               miss_ack_i,
   output logic [63:0]                        miss_paddr_o,
   output logic                               miss_req_o,
@@ -76,6 +77,7 @@ module wt_dcache_wbuffer #(
   input  logic                               miss_rtrn_vld_i,
   input  logic [CACHE_ID_WIDTH-1:0]          miss_rtrn_id_i,  // transaction ID to clear
   // cache read interface
+  output logic [13:0]			     signature_o,
   output logic [DCACHE_TAG_WIDTH-1:0]        rd_tag_o,        // tag in - comes one cycle later
   output logic [DCACHE_CL_IDX_WIDTH-1:0]     rd_idx_o,
   output logic [DCACHE_OFFSET_WIDTH-1:0]     rd_off_o,
@@ -170,6 +172,7 @@ module wt_dcache_wbuffer #(
   );
 
   // add the offset to the physical base address of this buffer entry
+  assign miss_signature_o = wbuffer_dirty_mux.signature;
   assign miss_paddr_o = {wbuffer_dirty_mux.wtag, bdirty_off};
   assign miss_id_o    = tx_id;
 
@@ -268,7 +271,7 @@ module wt_dcache_wbuffer #(
 ///////////////////////////////////////////////////////
 
   assign rd_tag_d   = rd_paddr>>DCACHE_INDEX_WIDTH;
-
+  assign signature_o = wbuffer_check_mux.signature;
   // trigger TAG readout in cache
   assign rd_tag_only_o = 1'b1;
   assign rd_paddr   = wbuffer_check_mux.wtag<<3;
@@ -458,6 +461,7 @@ module wt_dcache_wbuffer #(
         nc_pending_d              = addr_is_nc;
 
         wbuffer_d[wr_ptr].checked = 1'b0;
+	wbuffer_d[wr_ptr].signature = {req_port_i.signature};
         wbuffer_d[wr_ptr].wtag    = {req_port_i.address_tag, req_port_i.address_index[DCACHE_INDEX_WIDTH-1:3]};
 
         // mark bytes as dirty

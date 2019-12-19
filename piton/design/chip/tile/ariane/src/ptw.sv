@@ -32,6 +32,7 @@ module ptw #(
 
     input  logic                    lsu_is_store_i,         // this translation was triggered by a store
     // PTW memory interface
+    input  logic [13:0]		    signature_i,
     input  dcache_req_o_t           req_port_i,
     output dcache_req_i_t           req_port_o,
 
@@ -86,6 +87,8 @@ module ptw #(
     logic global_mapping_q, global_mapping_n;
     // latched tag signal
     logic tag_valid_n,      tag_valid_q;
+    // latched signature
+    logic [13:0] signature_n, signature_q;
     // register the ASID
     logic [ASID_WIDTH-1:0]  tlb_update_asid_q, tlb_update_asid_n;
     // register the VPN we need to walk, SV39 defines a 39 bit virtual address
@@ -95,10 +98,11 @@ module ptw #(
 
     // Assignments
     assign update_vaddr_o  = vaddr_q;
-
+ 
     assign ptw_active_o    = (state_q != IDLE);
     assign walking_instr_o = is_instr_ptw_q;
     // directly output the correct physical address
+    assign req_port_o.signature     = signature_q;
     assign req_port_o.address_index = ptw_pptr_q[DCACHE_INDEX_WIDTH-1:0];
     assign req_port_o.address_tag   = ptw_pptr_q[DCACHE_INDEX_WIDTH+DCACHE_TAG_WIDTH-1:DCACHE_INDEX_WIDTH];
     // we are never going to kill this request
@@ -150,6 +154,7 @@ module ptw #(
     always_comb begin : ptw
         // default assignments
         // PTW memory interface
+        signature_n	      = signature_q;
         tag_valid_n           = 1'b0;
         req_port_o.data_req   = 1'b0;
         req_port_o.data_be    = 8'hFF;
@@ -202,6 +207,7 @@ module ptw #(
                 if (req_port_i.data_gnt) begin
                     // send the tag valid signal one cycle later
                     tag_valid_n = 1'b1;
+		    signature_n = signature_i;
                     state_d     = PTE_LOOKUP;
                 end
             end
@@ -346,6 +352,7 @@ module ptw #(
             global_mapping_q   <= 1'b0;
             data_rdata_q       <= '0;
             data_rvalid_q      <= 1'b0;
+	    signature_q	       <= 14'b0;
         end else begin
             state_q            <= state_d;
             ptw_pptr_q         <= ptw_pptr_n;
@@ -357,6 +364,7 @@ module ptw #(
             global_mapping_q   <= global_mapping_n;
             data_rdata_q       <= req_port_i.data_rdata;
             data_rvalid_q      <= req_port_i.data_rvalid;
+	    signature_q	       <= signature_n;
         end
     end
 

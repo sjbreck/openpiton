@@ -74,6 +74,7 @@ package wt_cache_pkg;
 
 
   typedef struct packed {
+    logic [13:0]						       signature;
     logic [ariane_pkg::DCACHE_INDEX_WIDTH+ariane_pkg::DCACHE_TAG_WIDTH-1:0] wtag;
     logic [63:0]                                                            data;
     logic [7:0]                                                             dirty;   // byte is dirty

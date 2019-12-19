@@ -43,6 +43,8 @@ module store_unit (
     // D$ interface
     output amo_req_t                 amo_req_o,
     input  amo_resp_t                amo_resp_i,
+
+    input  logic[13:0]		     signature_i,
     input  dcache_req_o_t            req_port_i,
     output dcache_req_i_t            req_port_o
 );
@@ -233,6 +235,8 @@ module store_unit (
         .data_i                ( st_data_q              ),
         .be_i                  ( st_be_q                ),
         .data_size_i           ( st_data_size_q         ),
+
+	.signature_i	       ( signature_i		),
         .req_port_i            ( req_port_i             ),
         .req_port_o            ( req_port_o             )
     );

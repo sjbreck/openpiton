@@ -35,6 +35,7 @@ module wt_dcache_missunit #(
   input  amo_req_t                                   amo_req_i,
   output amo_resp_t                                  amo_resp_o,
   // miss handling interface (ld, ptw, wbuffer)
+  input  logic [NumPorts-1:0][13:0]		     miss_signature_i,
   input  logic [NumPorts-1:0]                        miss_req_i,
   output logic [NumPorts-1:0]                        miss_ack_o,
   input  logic [NumPorts-1:0]                        miss_nc_i,
@@ -54,6 +55,9 @@ module wt_dcache_missunit #(
   input  logic [DCACHE_MAX_TX-1:0][63:0]             tx_paddr_i,         // used to check for address collisions with read operations
   input  logic [DCACHE_MAX_TX-1:0]                   tx_vld_i,           // used to check for address collisions with read operations
   // write interface to cache memory
+  output logic [$clog2(DCACHE_SET_ASSOC)-1:0] 	     wr_sig_we_o,
+  output logic	                                     write_signature_o,        // enable signature writes
+  output logic [13:0]                                wr_cl_signature_o,        // writes a full cacheline
   output logic                                       wr_cl_vld_o,        // writes a full cacheline
   output logic                                       wr_cl_nc_o,         // writes a full cacheline
   output logic [DCACHE_SET_ASSOC-1:0]                wr_cl_we_o,         // writes a full cacheline
@@ -68,7 +72,15 @@ module wt_dcache_missunit #(
   input  dcache_rtrn_t                               mem_rtrn_i,
   output logic                                       mem_data_req_o,
   input  logic                                       mem_data_ack_i,
-  output dcache_req_t                                mem_data_o
+  output dcache_req_t                                mem_data_o,
+ 
+  // predictor interface
+  input  logic					     pred_hit_i,
+  input  logic					     pred_miss_i,
+  input  logic					     pred_outcome_i,
+  input  logic [13:0]				     pred_hit_shct_i,
+  input  logic [13:0]				     pred_miss_shct_i,
+  input  logic [13:0]				     pred_shct_i
 );
 
   // controller FSM
@@ -77,6 +89,7 @@ module wt_dcache_missunit #(
 
   // MSHR for reads
   typedef struct packed {
+    logic [13:0]			 signature;
     logic [63:0]                         paddr   ;
     logic [2:0]                          size    ;
     logic [DCACHE_SET_ASSOC-1:0]         vld_bits;
@@ -111,6 +124,8 @@ module wt_dcache_missunit #(
   logic [NumPorts-1:0] mshr_rdrd_collision;
   logic tx_rdwr_collision, mshr_rdwr_collision;
 
+
+
 ///////////////////////////////////////////////////////
 // input arbitration and general control sigs
 ///////////////////////////////////////////////////////
@@ -140,6 +155,28 @@ module wt_dcache_missunit #(
   end
 
 ///////////////////////////////////////////////////////
+// line prediction
+///////////////////////////////////////////////////////
+logic 	pred_result;
+
+wt_dcache_predictor #(
+   .Axi64BitCompliant(1'b0),
+   .NumPorts(3)
+)(
+   .clk_i		(clk_i),
+   .rst_ni		(rst_ni),
+   .flush_i		(flush_i),
+   .pred_hit_i  	(pred_hit_i),
+   .pred_miss_i 	(pred_miss_i),
+   .pred_outcome_i	(pred_outcome_i),
+   .pred_hit_shct_i     (pred_hit_shct_i),
+   .pred_miss_shct_i    (pred_miss_shct_i),
+   .pred_shct_i		(pred_shct_i),
+   .pred_result_o	(pred_result)
+); 
+
+
+///////////////////////////////////////////////////////
 // MSHR and way replacement logic (only for read ops)
 ///////////////////////////////////////////////////////
 
@@ -151,7 +188,7 @@ module wt_dcache_missunit #(
     .cnt_o   ( inv_way                         ),
     .empty_o ( all_ways_valid                  )
   );
-/*
+
   // generate random cacheline index
   lfsr_8bit #(
     .WIDTH ( ariane_pkg::DCACHE_SET_ASSOC )
@@ -162,9 +199,9 @@ module wt_dcache_missunit #(
     .refill_way_oh  (             ),
     .refill_way_bin ( rnd_way     )
   );
-*/
 
-  plru #(
+
+  /*plru #(
     .WAYS ( ariane_pkg::DCACHE_SET_ASSOC )
   ) u_repl_policy (
     .clk          ( clk_i       ),
@@ -172,18 +209,20 @@ module wt_dcache_missunit #(
     .en             ( update_lfsr ),
     .evictable_way  ( miss_ever_hit_i[miss_port_idx]),
     .evict_way_idx  ( rnd_way     )
-  );
+  );*/
 
   assign rep_way                = (all_ways_valid) ? rnd_way : inv_way; 
-  assign repl_way               = (miss_paddr_i[miss_port_idx][23:12] == 12'd3) ? rep_way : 3'b0;
-
-  assign mshr_d.size            = (mshr_allocate)  ? miss_size_i    [miss_port_idx] : mshr_q.size;
-  assign mshr_d.paddr           = (mshr_allocate)  ? miss_paddr_i   [miss_port_idx] : mshr_q.paddr;
-  assign mshr_d.vld_bits        = (mshr_allocate)  ? miss_vld_bits_i[miss_port_idx] : mshr_q.vld_bits;
-  assign mshr_d.id              = (mshr_allocate)  ? miss_id_i      [miss_port_idx] : mshr_q.id;
-  assign mshr_d.nc              = (mshr_allocate)  ? miss_nc_i      [miss_port_idx] : mshr_q.nc;
-  assign mshr_d.repl_way        = (mshr_allocate)  ? repl_way                       : mshr_q.repl_way;
-  assign mshr_d.miss_port_idx   = (mshr_allocate)  ? miss_port_idx                  : mshr_q.miss_port_idx;
+  assign repl_way               =  rep_way;
+  //assign repl_way               = (miss_paddr_i[miss_port_idx][23:12] == 12'd3) ? rep_way : 3'b0;
+ 
+  assign mshr_d.signature	= (mshr_allocate)  ? miss_signature_i[miss_port_idx] : mshr_q.signature; 
+  assign mshr_d.size            = (mshr_allocate)  ? miss_size_i     [miss_port_idx] : mshr_q.size;
+  assign mshr_d.paddr           = (mshr_allocate)  ? miss_paddr_i    [miss_port_idx] : mshr_q.paddr;
+  assign mshr_d.vld_bits        = (mshr_allocate)  ? miss_vld_bits_i [miss_port_idx] : mshr_q.vld_bits;
+  assign mshr_d.id              = (mshr_allocate)  ? miss_id_i       [miss_port_idx] : mshr_q.id;
+  assign mshr_d.nc              = (mshr_allocate)  ? miss_nc_i       [miss_port_idx] : mshr_q.nc;
+  assign mshr_d.repl_way        = (mshr_allocate)  ? repl_way                        : mshr_q.repl_way;
+  assign mshr_d.miss_port_idx   = (mshr_allocate)  ? miss_port_idx                   : mshr_q.miss_port_idx;
 
   // currently we only have one outstanding read TX, hence an incoming load clears the MSHR
   assign mshr_vld_d = (mshr_allocate) ? 1'b1 :
@@ -333,8 +372,15 @@ module wt_dcache_missunit #(
 ///////////////////////////////////////////////////////
 
   // cacheline write port
+  assign write_signature_o = cl_write_en;
   assign wr_cl_nc_o      = mshr_q.nc;
   assign wr_cl_vld_o     = load_ack | (| wr_cl_we_o);
+
+  assign wr_sig_we_o      = (flush_en   )   ? '1                    :           
+                            (inv_vld_all)   ? '1                    :
+                            (inv_vld    )   ? mem_rtrn_i.inv.way    :
+                            (cl_write_en)   ? mshr_q.repl_way	    :
+                                            '0;
 
   assign wr_cl_we_o      = (flush_en   )  ? '1                                    :
                            (inv_vld_all)   ? '1                                    :
@@ -350,7 +396,8 @@ module wt_dcache_missunit #(
   assign wr_cl_idx_o     = (flush_en) ? cnt_q                                                        :
                            (inv_vld)  ? mem_rtrn_i.inv.idx[DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH] :
                                         mshr_q.paddr[DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH];
-
+  
+  assign wr_cl_signature_o = mshr_q.signature;
   assign wr_cl_tag_o     = mshr_q.paddr[DCACHE_TAG_WIDTH+DCACHE_INDEX_WIDTH-1:DCACHE_INDEX_WIDTH];
   assign wr_cl_off_o     = mshr_q.paddr[DCACHE_OFFSET_WIDTH-1:0];
   assign wr_cl_data_o    = mem_rtrn_i.data;

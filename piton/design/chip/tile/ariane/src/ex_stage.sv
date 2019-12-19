@@ -261,6 +261,7 @@ module ex_stage #(
         .clk_i,
         .rst_ni,
         .flush_i,
+	.pc_i,
         .no_st_pending_o,
         .fu_data_i             ( lsu_data ),
         .lsu_ready_o,

@@ -24,6 +24,7 @@ module wt_dcache #(
 ) (
   input  logic                           clk_i,       // Clock
   input  logic                           rst_ni,      // Asynchronous reset active low
+  //input  logic [63:0]			 pc_i,        //pc at ex_stage
 
   // Cache management
   input  logic                           enable_i,    // from CSR
@@ -47,13 +48,22 @@ module wt_dcache #(
   output dcache_req_t                    mem_data_o
 );
 
+
   // LD unit and PTW
   localparam NumPorts = 3;
+
+  // signature generation
+  logic [NumPorts-1:0][13:0] 	  signature;
+  //assign signature = pc_i[13:0];
+
 
   // miss unit <-> read controllers
   logic cache_en;
 
   // miss unit <-> memory
+  logic	[$clog2(DCACHE_SET_ASSOC)-1:0]  wr_sig_we;
+  logic	                          write_signature;
+  logic [13:0]                    wr_cl_signature;
   logic                           wr_cl_vld;
   logic                           wr_cl_nc;
   logic [DCACHE_SET_ASSOC-1:0]    wr_cl_we;
@@ -69,8 +79,17 @@ module wt_dcache #(
   logic [DCACHE_OFFSET_WIDTH-1:0] wr_off;
   logic [63:0]                    wr_data;
   logic [7:0]                     wr_data_be;
+  //predictor interface
+  logic 			  pred_hit;
+  logic				  pred_miss;
+  logic				  pred_outcome;
+  logic	[13:0]			  pred_hit_shct;
+  logic [13:0]			  pred_miss_shct;
+  logic [13:0]			  pred_shct;
+
 
   // miss unit <-> controllers/wbuffer
+  logic [NumPorts-1:0][13:0]                    miss_signature;
   logic [NumPorts-1:0]                          miss_req;
   logic [NumPorts-1:0]                          miss_ack;
   logic [NumPorts-1:0]                          miss_nc;
@@ -127,6 +146,7 @@ module wt_dcache #(
     .amo_req_i          ( amo_req_i          ),
     .amo_resp_o         ( amo_resp_o         ),
     // miss handling interface
+    .miss_signature_i   ( miss_signature     ),
     .miss_req_i         ( miss_req           ),
     .miss_ack_o         ( miss_ack           ),
     .miss_nc_i          ( miss_nc            ),
@@ -144,6 +164,9 @@ module wt_dcache #(
     .tx_paddr_i         ( tx_paddr           ),
     .tx_vld_i           ( tx_vld             ),
     // cache memory interface
+    .wr_sig_we_o  	( wr_sig_we    	     ),
+    .write_signature_o  ( write_signature    ),
+    .wr_cl_signature_o  ( wr_cl_signature    ),
     .wr_cl_vld_o        ( wr_cl_vld          ),
     .wr_cl_nc_o         ( wr_cl_nc           ),
     .wr_cl_we_o         ( wr_cl_we           ),
@@ -158,7 +181,15 @@ module wt_dcache #(
     .mem_rtrn_i         ( mem_rtrn_i         ),
     .mem_data_req_o     ( mem_data_req_o     ),
     .mem_data_ack_i     ( mem_data_ack_i     ),
-    .mem_data_o         ( mem_data_o         )
+    .mem_data_o         ( mem_data_o         ),
+
+    // input to predictor
+    .pred_hit_i	       ( pred_hit	    ),
+    .pred_miss_i       ( pred_miss	    ),
+    .pred_outcome_i    ( pred_outcome	    ),
+    .pred_hit_shct_i   ( pred_hit_shct	    ),
+    .pred_miss_shct_i  ( pred_miss_shct	    ),
+    .pred_shct_i       ( pred_shct	    )
   );
 
 ///////////////////////////////////////////////////////
@@ -181,6 +212,7 @@ module wt_dcache #(
       .req_port_i      ( req_ports_i   [k] ),
       .req_port_o      ( req_ports_o   [k] ),
       // miss interface
+      .miss_signature_o( miss_signature[k] ),
       .miss_req_o      ( miss_req      [k] ),
       .miss_ack_i      ( miss_ack      [k] ),
       .miss_we_o       ( miss_we       [k] ),
@@ -196,6 +228,7 @@ module wt_dcache #(
       // used to detect readout mux collisions
       .wr_cl_vld_i     ( wr_cl_vld         ),
       // cache mem interface
+      .signature_o     ( signature     [k] ),
       .rd_tag_o        ( rd_tag        [k] ),
       .rd_idx_o        ( rd_idx        [k] ),
       .rd_off_o        ( rd_off        [k] ),
@@ -228,6 +261,7 @@ module wt_dcache #(
     .req_port_i      ( req_ports_i   [2]   ),
     .req_port_o      ( req_ports_o   [2]   ),
     // miss unit interface
+    .miss_signature_o( miss_signature[2]   ),
     .miss_req_o      ( miss_req      [2]   ),
     .miss_ack_i      ( miss_ack      [2]   ),
     .miss_we_o       ( miss_we       [2]   ),
@@ -240,6 +274,7 @@ module wt_dcache #(
     .miss_rtrn_vld_i ( miss_rtrn_vld [2]   ),
     .miss_rtrn_id_i  ( miss_rtrn_id        ),
     // cache read interface
+    .signature_o     ( signature     [2]   ),
     .rd_tag_o        ( rd_tag        [2]   ),
     .rd_idx_o        ( rd_idx        [2]   ),
     .rd_off_o        ( rd_off        [2]   ),
@@ -276,6 +311,7 @@ module wt_dcache #(
     .clk_i             ( clk_i              ),
     .rst_ni            ( rst_ni             ),
     // read ports
+    .signature_i       ( signature          ),
     .rd_prio_i         ( rd_prio            ),
     .rd_tag_i          ( rd_tag             ),
     .rd_idx_i          ( rd_idx             ),
@@ -288,6 +324,9 @@ module wt_dcache #(
     .rd_ever_hit_o     ( rd_ever_hit        ),
     .rd_data_o         ( rd_data            ),
     // cacheline write port
+    .wr_sig_we_i       ( wr_sig_we	    ),
+    .write_signature_i ( write_signature    ),
+    .wr_cl_signature_i ( wr_cl_signature    ),
     .wr_cl_vld_i       ( wr_cl_vld          ),
     .wr_cl_nc_i        ( wr_cl_nc           ),
     .wr_cl_we_i        ( wr_cl_we           ),
@@ -305,8 +344,20 @@ module wt_dcache #(
     .wr_data_i         ( wr_data            ),
     .wr_data_be_i      ( wr_data_be         ),
     // write buffer forwarding
-    .wbuffer_data_i    ( wbuffer_data       )
+    .wbuffer_data_i    ( wbuffer_data       ),
+
+    // output to predictor
+    .pred_hit_o	       ( pred_hit	    ),
+    .pred_miss_o       ( pred_miss	    ),
+    .pred_outcome_o    ( pred_outcome	    ),
+    .pred_hit_shct_o   ( pred_hit_shct	    ),
+    .pred_miss_shct_o  ( pred_miss_shct	    ),
+    .pred_shct_o       ( pred_shct	    )
+
   );
+
+
+
 
 ///////////////////////////////////////////////////////
 // assertions

@@ -703,12 +703,14 @@ package ariane_pkg;
         logic [1:0]                    data_size;
         logic                          kill_req;
         logic                          tag_valid;
+	logic [13:0]		       signature;
     } dcache_req_i_t;
 
     typedef struct packed {
         logic                          data_gnt;
         logic                          data_rvalid;
         logic [63:0]                   data_rdata;
+	logic [13:0]		       signature;
     } dcache_req_o_t;
 
     // ----------------------

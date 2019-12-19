@@ -36,6 +36,7 @@ module wt_dcache_mem #(
   input  logic                                              rst_ni,
 
   // ports
+  input  logic  [NumPorts-1:0][13:0]			 signature_i,		// coupled with tag
   input  logic  [NumPorts-1:0][DCACHE_TAG_WIDTH-1:0]        rd_tag_i,           // tag in - comes one cycle later
   input  logic  [NumPorts-1:0][DCACHE_CL_IDX_WIDTH-1:0]     rd_idx_i,
   input  logic  [NumPorts-1:0][DCACHE_OFFSET_WIDTH-1:0]     rd_off_i,
@@ -49,6 +50,9 @@ module wt_dcache_mem #(
   output logic                [63:0]                        rd_data_o,
 
   // only available on port 0, uses address signals of port 0
+  input  logic 		      [$clog2(DCACHE_SET_ASSOC)-1:0]wr_sig_we_i,
+  input  logic                                              write_signature_i,
+  input  logic                [13:0]                        wr_cl_signature_i,
   input  logic                                              wr_cl_vld_i,
   input  logic                                              wr_cl_nc_i,         // noncacheable access
   input  logic                [DCACHE_SET_ASSOC-1:0]        wr_cl_we_i,         // writes a full cacheline
@@ -68,7 +72,16 @@ module wt_dcache_mem #(
   input  logic                [7:0]                         wr_data_be_i,
 
   // forwarded wbuffer
-  input wbuffer_t             [DCACHE_WBUF_DEPTH-1:0]       wbuffer_data_i
+  input wbuffer_t             [DCACHE_WBUF_DEPTH-1:0]       wbuffer_data_i,
+
+  //output to predictor
+  output logic						    pred_hit_o,
+  output logic						    pred_miss_o,
+  output logic						    pred_outcome_o,
+  output logic		      [13:0]			    pred_hit_shct_o, //signature that hitted
+  output logic		      [13:0]			    pred_miss_shct_o, //signature that missed
+  output logic		      [13:0]			    pred_shct_o // signature used for predict
+
 );
 
   logic [DCACHE_NUM_BANKS-1:0]                                  bank_req;
@@ -82,6 +95,7 @@ module wt_dcache_mem #(
   logic [DCACHE_NUM_BANKS-1:0][DCACHE_SET_ASSOC-1:0][63:0]      bank_rdata;                   //
   logic [DCACHE_SET_ASSOC-1:0][63:0]                            rdata_cl;                     // selected word from each cacheline
 
+  logic [13:0]					       signature_arbit;			      // 3 input signatures arbitrated one by one
   logic [DCACHE_TAG_WIDTH-1:0]                                  rd_tag;
   logic [DCACHE_SET_ASSOC-1:0]                                  vld_req;                      // bit enable for valid regs
   logic                                                         vld_we;                       // valid bits write enable
@@ -101,6 +115,98 @@ module wt_dcache_mem #(
   logic                                                         cmp_en_d, cmp_en_q;
   logic                                                         rd_acked;
   logic [NumPorts-1:0]                                          bank_collision, rd_req_masked, rd_req_prio;
+
+///////////////////////////////////////////////////////
+// Signature Array
+///////////////////////////////////////////////////////
+logic[13:0] sig_array_d [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+logic[13:0] sig_array_q [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+//ff array of signatures
+
+logic store_sig[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
+	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_ways_comb
+		assign store_sig[i][j] = (write_signature_i && wr_cl_idx_i==i && wr_sig_we_i==j)?
+					 1:0; 
+		assign sig_array_d[i][j] = store_sig[i][j] ? wr_cl_signature_i
+					   :sig_array_q[i][j];
+	end
+end
+
+for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs
+	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_ways
+		always_ff @(negedge rst_ni or posedge clk_i) begin: gen_reg_arrays
+			if(!rst_ni)begin
+				sig_array_q[i][j] <= '0;
+			end
+			else begin
+				sig_array_q[i][j] <= sig_array_d[i][j];
+			end
+		end
+	end
+end
+
+///////////////////////////////////////////////////////
+// Outcome Array
+///////////////////////////////////////////////////////
+logic outcome_d [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+logic outcome_q [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+
+logic update_outcome_on_hit[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+logic update_outcome_on_miss[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_outcome_idxs_bool
+	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_ways_bool
+
+		assign update_outcome_on_hit[i][j] = (rd_hit_oh_o[j] && vld_addr==i)?
+					      	      1:0; 
+		
+		assign update_outcome_on_miss[i][j] = (write_signature_i && wr_cl_idx_i==i 
+						       && wr_sig_we_i==j)? 1:0;
+		
+		assign outcome_d[i][j] = update_outcome_on_hit[i][j] ? 
+					  1: update_outcome_on_miss[i][j]?
+					  0: outcome_q[i][j];
+	end
+end
+
+for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_outcome_ff_idxs
+	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_outcome_ff_ways
+		always_ff @(negedge rst_ni or posedge clk_i) begin: gen_outcome_ff_arrays
+			if(!rst_ni)begin
+				outcome_q[i][j] <= '0;
+			end
+			else begin
+				outcome_q[i][j] <= outcome_d[i][j];
+			end
+		end
+	end
+end
+
+///////////////////////////////////////////////////////
+// Predictor Interface
+///////////////////////////////////////////////////////
+
+logic [$clog2(DCACHE_SET_ASSOC)-1:0]  rd_hit_idx;
+assign pred_hit_o = |rd_hit_oh_o;
+assign pred_miss_o = write_signature_i;
+assign pred_shct_o = (write_signature_i)? wr_cl_signature_i:'0;
+
+always_comb begin: output_to_predictor
+	if(pred_hit_o)begin
+		pred_hit_shct_o = sig_array_q[vld_addr][rd_hit_idx];
+	end
+	else begin
+		pred_hit_shct_o = '0;
+	end
+	if(pred_miss_o)begin
+		pred_miss_shct_o = sig_array_q[wr_cl_idx_i][wr_sig_we_i];
+		pred_outcome_o = outcome_q[wr_cl_idx_i][wr_sig_we_i];
+	end
+	else begin
+		pred_miss_shct_o = '0;
+		pred_outcome_o = '0;
+	end
+end
 
 ///////////////////////////////////////////////////////
 // arbiter
@@ -129,6 +235,7 @@ module wt_dcache_mem #(
   assign vld_addr   = (wr_cl_vld_i) ? wr_cl_idx_i   : rd_idx_i[vld_sel_d];
   assign bank_idx_d = (wr_cl_vld_i) ? wr_cl_idx_i   : rd_idx_i[vld_sel_d];
   assign rd_tag     = rd_tag_i[vld_sel_q]; //delayed by one cycle
+  assign signature_arbit = signature_i[vld_sel_q]; //delayed by one cycle
   assign bank_off_d = (wr_cl_vld_i) ? wr_cl_off_i   : rd_off_i[vld_sel_d];
   assign vld_req    = (wr_cl_vld_i) ? wr_cl_we_i    : (rd_acked) ? '1 : '0;
 
@@ -197,7 +304,7 @@ module wt_dcache_mem #(
 
   logic [DCACHE_OFFSET_WIDTH-1:0]       wr_cl_off;
   logic [$clog2(DCACHE_WBUF_DEPTH)-1:0] wbuffer_hit_idx;
-  logic [$clog2(DCACHE_SET_ASSOC)-1:0]  rd_hit_idx;
+  //logic [$clog2(DCACHE_SET_ASSOC)-1:0]  rd_hit_idx;
 
   assign cmp_en_d = (|vld_req) & ~vld_we;
 
