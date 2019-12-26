@@ -79,6 +79,8 @@ module wt_dcache #(
   logic [NumPorts-1:0][63:0]                    miss_paddr;
   logic [NumPorts-1:0][DCACHE_SET_ASSOC-1:0]    miss_vld_bits;
   logic [NumPorts-1:0][DCACHE_SET_ASSOC-1:0]    miss_ever_hit;
+  logic [NumPorts-1:0][$clog2(DCACHE_SET_ASSOC)-1:0] miss_rep_way;
+  logic [NumPorts-1:0]                          miss_rep_way_vld;
   logic [NumPorts-1:0][2:0]                     miss_size;
   logic [NumPorts-1:0][CACHE_ID_WIDTH-1:0]      miss_id;
   logic [NumPorts-1:0]                          miss_replay;
@@ -96,7 +98,9 @@ module wt_dcache #(
   logic [63:0]                                  rd_data;
   logic [DCACHE_SET_ASSOC-1:0]                  rd_vld_bits;
   logic [DCACHE_SET_ASSOC-1:0]                  rd_hit_oh;
-  logic [DCACHE_SET_ASSOC-1:0]                  rd_ever_hit;
+  logic [DCACHE_SET_ASSOC-1:0]                  rd_ever_hit,
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0]          rd_rep_way,        // use this way in case of miss
+  logic                                         rd_rep_way_vld;   // force the way to be the one used in replace
 
   // miss unit <-> wbuffer
   logic [DCACHE_MAX_TX-1:0][63:0]               tx_paddr;
@@ -135,6 +139,8 @@ module wt_dcache #(
     .miss_paddr_i       ( miss_paddr         ),
     .miss_vld_bits_i    ( miss_vld_bits      ),
     .miss_ever_hit_i    ( miss_ever_hit      ),
+    .miss_rep_way_i     ( miss_rep_way       ),
+    .miss_rep_way_vld_i ( miss_rep_way_vld   ),
     .miss_size_i        ( miss_size          ),
     .miss_id_i          ( miss_id            ),
     .miss_replay_o      ( miss_replay        ),
@@ -187,6 +193,8 @@ module wt_dcache #(
       .miss_wdata_o    ( miss_wdata    [k] ),
       .miss_vld_bits_o ( miss_vld_bits [k] ),
       .miss_ever_hit_o ( miss_ever_hit [k] ),
+      .miss_rep_way_o  ( miss_rep_way  [k] ),
+      .miss_rep_way_vld_o ( miss_rep_way_vld [k] ),
       .miss_paddr_o    ( miss_paddr    [k] ),
       .miss_nc_o       ( miss_nc       [k] ),
       .miss_size_o     ( miss_size     [k] ),
@@ -205,6 +213,8 @@ module wt_dcache #(
       .rd_data_i       ( rd_data           ),
       .rd_vld_bits_i   ( rd_vld_bits       ),
       .rd_ever_hit_i   ( rd_ever_hit       ),
+      .rd_rep_way_i    ( rd_rep_way        ),
+      .rd_rep_way_vld_i ( rd_rep_way_vld   ),
       .rd_hit_oh_i     ( rd_hit_oh         )
     );
   end
@@ -286,6 +296,8 @@ module wt_dcache #(
     .rd_vld_bits_o     ( rd_vld_bits        ),
     .rd_hit_oh_o       ( rd_hit_oh          ),
     .rd_ever_hit_o     ( rd_ever_hit        ),
+    .rd_rep_way_o      ( rd_rep_way         ),
+    .rd_rep_way_vld_o  ( rd_rep_way_vld     ),
     .rd_data_o         ( rd_data            ),
     // cacheline write port
     .wr_cl_vld_i       ( wr_cl_vld          ),

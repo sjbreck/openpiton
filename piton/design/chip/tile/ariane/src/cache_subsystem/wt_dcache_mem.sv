@@ -43,9 +43,11 @@ module wt_dcache_mem #(
   input  logic  [NumPorts-1:0]                              rd_tag_only_i,      // only do a tag/valid lookup, no access to data arrays
   input  logic  [NumPorts-1:0]                              rd_prio_i,          // 0: low prio, 1: high prio
   output logic  [NumPorts-1:0]                              rd_ack_o,
-  output logic                [DCACHE_SET_ASSOC-1:0]        rd_vld_bits_o,
+  output logic                [DCACHE_SET_ASSOC-1:0] .      rd_vld_bits_o,
   output logic                [DCACHE_SET_ASSOC-1:0]        rd_ever_hit_o,
   output logic                [DCACHE_SET_ASSOC-1:0]        rd_hit_oh_o,
+  output logic        [$clog2(DCACHE_SET_ASSOC)-1:0]        rd_rep_way_o,        // use this way in case of miss
+  output logic                                              rd_rep_way_vld_o,  // force the way to be the one used in replace
   output logic                [63:0]                        rd_data_o,
 
   // only available on port 0, uses address signals of port 0
@@ -103,6 +105,8 @@ module wt_dcache_mem #(
   logic                                                         rd_acked;
   logic [NumPorts-1:0]                                          bank_collision, rd_req_masked, rd_req_prio;
 
+  localparam BANK_SIZE_BITS = 3; // a bank is 8 bytes
+  localparam BANK_SEL_BITS = $clog2(DCACHE_NUM_BANKS);
 ///////////////////////////////////////////////////////
 // arbiter
 ///////////////////////////////////////////////////////
@@ -167,7 +171,7 @@ module wt_dcache_mem #(
     bank_idx = '{default:wr_idx_i};
 
     for(int k=0; k<NumPorts; k++) begin
-      bank_collision[k] = rd_off_i[k][DCACHE_OFFSET_WIDTH-1:3] == wr_off_i[DCACHE_OFFSET_WIDTH-1:3];
+      bank_collision[k] = rd_off_i[k][DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS] == wr_off_i[DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS];
     end
 
     if(wr_cl_vld_i & |wr_cl_we_i) begin
@@ -177,16 +181,16 @@ module wt_dcache_mem #(
     end else begin
       if(rd_acked) begin
         if(!rd_tag_only_i[vld_sel_d]) begin
-          bank_req                                               = dcache_cl_bin2oh(rd_off_i[vld_sel_d][DCACHE_OFFSET_WIDTH-1:3]);
-          bank_idx[rd_off_i[vld_sel_d][DCACHE_OFFSET_WIDTH-1:3]] = rd_idx_i[vld_sel_d];
+          bank_req                                               = dcache_cl_bin2oh(rd_off_i[vld_sel_d][DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS]);
+          bank_idx[rd_off_i[vld_sel_d][DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS]] = rd_idx_i[vld_sel_d];
         end
       end
 
       if(|wr_req_i) begin
         if(rd_tag_only_i[vld_sel_d] || !(rd_ack_o[vld_sel_d] && bank_collision[vld_sel_d])) begin
           wr_ack_o = 1'b1;
-          bank_req |= dcache_cl_bin2oh(wr_off_i[DCACHE_OFFSET_WIDTH-1:3]);
-          bank_we   = dcache_cl_bin2oh(wr_off_i[DCACHE_OFFSET_WIDTH-1:3]);
+          bank_req |= dcache_cl_bin2oh(wr_off_i[DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS]);
+          bank_we   = dcache_cl_bin2oh(wr_off_i[DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS]);
         end
       end
     end
@@ -205,12 +209,20 @@ module wt_dcache_mem #(
   // word tag comparison in write buffer
   assign wbuffer_cmp_addr = (wr_cl_vld_i) ? {wr_cl_tag_i, wr_cl_idx_i, wr_cl_off_i} :
                                             {rd_tag, bank_idx_q, bank_off_q};
+
+  wire [BANK_SEL_BITS-1:0] bank_sel = bank_off_q[DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS];
+
+
+  logic [DCACHE_SET_ASSOC*DCACHE_NUM_BANKS-1:0] rd_vld_bits;
+  logic                [DCACHE_SET_ASSOC-1:0]   rd_tag_hit_oh;
   // hit generation
   for (genvar i=0;i<DCACHE_SET_ASSOC;i++) begin : gen_tag_cmpsel
     // tag comparison of ways >0
-    assign rd_hit_oh_o[i] = (rd_tag == tag_rdata[i]) & rd_vld_bits_o[i]  & cmp_en_q;
+    assign rd_tag_hit_oh[i] = (rd_tag == tag_rdata[i]) && cmp_en_q;
+    assign rd_hit_oh_o[i] = rd_tag_hit_oh[i] && rd_vld_bits[i*DCACHE_NUM_BANKS+bank_sel];
+    assign rd_vld_bits_o[i] = |rd_vld_bits[i*DCACHE_NUM_BANKS+:DCACHE_NUM_BANKS];
     // byte offset mux of ways >0
-    assign rdata_cl[i] = bank_rdata[bank_off_q[DCACHE_OFFSET_WIDTH-1:3]][i];
+    assign rdata_cl[i] = bank_rdata[bank_sel][i];
   end
 
   for(genvar k=0; k<DCACHE_WBUF_DEPTH; k++) begin : gen_wbuffer_hit
@@ -224,7 +236,7 @@ module wt_dcache_mem #(
     .cnt_o   ( wbuffer_hit_idx  ),
     .empty_o (                  )
   );
-  wire rd_miss;
+  wire rd_miss, rd_tag_miss;
   lzc #(
     .WIDTH ( DCACHE_SET_ASSOC )
   ) i_lzc_rd_hit (
@@ -233,13 +245,25 @@ module wt_dcache_mem #(
     .empty_o ( rd_miss       )
   );
 
+  lzc #(
+    .WIDTH ( DCACHE_SET_ASSOC )
+  ) i_lzc_rd_tag_hit (
+    .in_i    ( rd_tag_hit_oh  ),
+    .cnt_o   ( rd_rep_way_o   ),
+    .empty_o ( rd_tag_miss    )
+  );
+
+ // we hardcode the way if there is a tag hit and one bank is valid already
+ // if the bank that hits is the one we are looking up, then its a cache hit and the rep_way is ignored
+  assign rd_rep_way_vld_o = !rd_tag_miss && rd_vld_bits_o[rd_rep_way_o];
+
   assign wbuffer_rdata = wbuffer_data_i[wbuffer_hit_idx].data;
   assign wbuffer_be    = (|wbuffer_hit_oh) ? wbuffer_data_i[wbuffer_hit_idx].valid : '0;
 
   if (Axi64BitCompliant) begin : gen_axi_off
-      assign wr_cl_off     = (wr_cl_nc_i) ? '0 : wr_cl_off_i[DCACHE_OFFSET_WIDTH-1:3];
+      assign wr_cl_off     = (wr_cl_nc_i) ? '0 : wr_cl_off_i[DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS];
   end else begin  : gen_piton_off
-      assign wr_cl_off     = wr_cl_off_i[DCACHE_OFFSET_WIDTH-1:3];
+      assign wr_cl_off     = wr_cl_off_i[DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS];
   end
 
   assign rdata         = (wr_cl_vld_i)  ? wr_cl_data_i[wr_cl_off*64 +: 64] :
@@ -274,15 +298,15 @@ module wt_dcache_mem #(
   end
 
   for (genvar i = 0; i < DCACHE_SET_ASSOC; i++) begin : gen_tag_srams
-
+    wire [DCACHE_NUM_BANKS-1:0] valid_bits = {2{vld_wdata[i]}};
     assign tag_rdata[i]     = vld_tag_rdata[i][DCACHE_TAG_WIDTH-1:0];
-    assign rd_vld_bits_o[i] = vld_tag_rdata[i][DCACHE_TAG_WIDTH];
+    assign rd_vld_bits[i*DCACHE_NUM_BANKS+:DCACHE_NUM_BANKS] = vld_tag_rdata[i][DCACHE_TAG_WIDTH+DCACHE_NUM_BANKS-1:DCACHE_TAG_WIDTH];
     assign rd_ever_hit_o[i] = hit_q[vld_addr_q][i];
 
     // Tag RAM
     sram #(
       // tag + valid bit
-      .DATA_WIDTH ( ariane_pkg::DCACHE_TAG_WIDTH + 1 ),
+      .DATA_WIDTH ( ariane_pkg::DCACHE_TAG_WIDTH + DCACHE_NUM_BANKS ),
       .NUM_WORDS  ( wt_cache_pkg::DCACHE_NUM_WORDS   )
     ) i_tag_sram (
       .clk_i     ( clk_i               ),
@@ -290,7 +314,7 @@ module wt_dcache_mem #(
       .req_i     ( vld_req[i]          ),
       .we_i      ( vld_we              ),
       .addr_i    ( vld_addr            ),
-      .wdata_i   ( {vld_wdata[i], wr_cl_tag_i} ),
+      .wdata_i   ( {valid_bits, wr_cl_tag_i} ),
       .be_i      ( '1                  ),
       .rdata_o   ( vld_tag_rdata[i]    )
     );

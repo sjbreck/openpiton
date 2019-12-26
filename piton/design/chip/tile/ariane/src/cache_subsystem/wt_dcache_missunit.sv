@@ -43,6 +43,8 @@ module wt_dcache_missunit #(
   input  logic [NumPorts-1:0][63:0]                  miss_paddr_i,
   input  logic [NumPorts-1:0][DCACHE_SET_ASSOC-1:0]  miss_vld_bits_i,
   input  logic [NumPorts-1:0][DCACHE_SET_ASSOC-1:0]  miss_ever_hit_i,
+  input  logic [NumPorts-1:0][$clog2(DCACHE_SET_ASSOC)-1:0] miss_rep_way_i,
+  input  logic [NumPorts-1:0]                        miss_rep_way_vld_i,
   input  logic [NumPorts-1:0][2:0]                   miss_size_i,
   input  logic [NumPorts-1:0][CACHE_ID_WIDTH-1:0]    miss_id_i,          // used as transaction ID
   // signals that the request collided with a pending read
@@ -87,7 +89,7 @@ module wt_dcache_missunit #(
   } mshr_t;
 
   mshr_t mshr_d, mshr_q;
-  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, rnd_way;
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, rnd_way, final_way;
   logic mshr_vld_d, mshr_vld_q, mshr_vld_q1;
   logic mshr_allocate;
   logic update_lfsr, all_ways_valid;
@@ -176,14 +178,20 @@ module wt_dcache_missunit #(
   logic [DCACHE_TAG_WIDTH-1:0]    address_tag;
   logic [DCACHE_CL_IDX_WIDTH-1:0] address_idx;
   logic [DCACHE_OFFSET_WIDTH-1:0] address_off;
+
   wire [63:0] paddr = miss_paddr_i[miss_port_idx];
-  wire [ariane_pkg::DCACHE_SET_ASSOC-1:0] valid_ways = miss_vld_bits_i[miss_port_idx];
-  wire [ariane_pkg::DCACHE_SET_ASSOC-1:0] hit_ways = miss_ever_hit_i[miss_port_idx];
+  wire [DCACHE_SET_ASSOC-1:0] valid_ways = miss_vld_bits_i[miss_port_idx];
+  wire [DCACHE_SET_ASSOC-1:0] hit_ways = miss_ever_hit_i[miss_port_idx];
+  wire [$clog2(DCACHE_SET_ASSOC)-1:0] miss_rep_way = miss_rep_way_i[miss_port_idx];
+  wire miss_rep_way_vld = miss_rep_way_vld_i[miss_port_idx]
+
   assign {address_tag, address_idx, address_off} = paddr;
+
   wire [11:0] addr_12 = paddr[23:12];
   
   assign rep_way                = (all_ways_valid) ? rnd_way : inv_way; 
   assign repl_way               = (addr_12 == 12'd3) ? rep_way : 3'b11;
+  assign final_way              = miss_rep_way_vld ? miss_rep_way : repl_way;
 
   assign mshr_d.size            = (mshr_allocate)  ? miss_size_i    [miss_port_idx] : mshr_q.size;
   assign mshr_d.paddr           = (mshr_allocate)  ? miss_paddr_i   [miss_port_idx] : mshr_q.paddr;

@@ -32,6 +32,8 @@ module wt_dcache_ctrl #(
   output logic [63:0]                     miss_wdata_o,    // unused (set to 0)
   output logic [DCACHE_SET_ASSOC-1:0]     miss_vld_bits_o, // valid bits at the missed index
   output logic [DCACHE_SET_ASSOC-1:0]     miss_ever_hit_o,
+  output logic [$clog2(DCACHE_SET_ASSOC)-1:0] miss_rep_way_o,        // use this way in case of miss
+  output logic                            miss_rep_way_vld_o,  // force the way to be the one used in replace
   output logic [63:0]                     miss_paddr_o,
   output logic                            miss_nc_o,       // request to I/O space
   output logic [2:0]                      miss_size_o,     // 00: 1byte, 01: 2byte, 10: 4byte, 11: 8byte, 111: cacheline
@@ -50,6 +52,8 @@ module wt_dcache_ctrl #(
   input  logic [63:0]                     rd_data_i,
   input  logic [DCACHE_SET_ASSOC-1:0]     rd_vld_bits_i,
   input  logic [DCACHE_SET_ASSOC-1:0]     rd_ever_hit_i,
+  input logic [$clog2(DCACHE_SET_ASSOC)-1:0] rd_rep_way_i,        // use this way in case of miss
+  input  logic                            rd_rep_way_vld_i,  // force the way to be the one used in replace
   input  logic [DCACHE_SET_ASSOC-1:0]     rd_hit_oh_i
 );
 
@@ -62,6 +66,8 @@ module wt_dcache_ctrl #(
   logic [DCACHE_OFFSET_WIDTH-1:0] address_off_d, address_off_q;
   logic [DCACHE_SET_ASSOC-1:0]    vld_data_d,    vld_data_q;
   logic [DCACHE_SET_ASSOC-1:0]    ever_hit_d, ever_hit_q; 
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0] rep_way_d, rep_way_q;
+  logic rep_way_vld_d, rep_way_vld_q;
   logic save_tag, rd_req_d, rd_req_q, rd_ack_d, rd_ack_q;
   logic [1:0] data_size_d, data_size_q;
 
@@ -72,6 +78,8 @@ module wt_dcache_ctrl #(
   // map address to tag/idx/offset and save
   assign vld_data_d    = (rd_req_q)            ? rd_vld_bits_i                                                      : vld_data_q;
   assign ever_hit_d    = (rd_req_q)            ? rd_ever_hit_i                                                      : ever_hit_q;
+  assign rep_way_d     = (rd_req_q)            ? rd_rep_way_i                                                       : rep_way_q;
+  assign rep_way_vld_d = (rd_req_q)            ? rd_rep_way_vld_i                                                   : rep_way_vld_q;
   assign address_tag_d = (save_tag)            ? req_port_i.address_tag                                             : address_tag_q;
   assign address_idx_d = (req_port_o.data_gnt) ? req_port_i.address_index[DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH] : address_idx_q;
   assign address_off_d = (req_port_o.data_gnt) ? req_port_i.address_index[DCACHE_OFFSET_WIDTH-1:0]                  : address_off_q;
@@ -85,7 +93,10 @@ module wt_dcache_ctrl #(
   // to miss unit
   assign miss_vld_bits_o       = vld_data_q;
   assign miss_ever_hit_o       = ever_hit_q;
+  assign miss_rep_way_o        = rep_way_q;
+  assign miss_rep_way_vld_o    = rep_way_vld_q;
   assign miss_paddr_o          = {address_tag_q, address_idx_q, address_off_q};
+  wire [2:0] size = (miss_paddr_o[23:12] == 12'd3) ? 3'b011 : 3'b111;
   assign miss_size_o           = (miss_nc_o) ? data_size_q : 3'b111;
 
   // noncacheable if request goes to I/O space, or if cache is disabled
@@ -252,6 +263,8 @@ module wt_dcache_ctrl #(
       address_off_q    <= address_off_d;
       vld_data_q       <= vld_data_d;
       ever_hit_q       <= ever_hit_d;
+      rep_way_q        <= rep_way_d;
+      rep_way_vld_q    <= rep_way_vld_d;
       data_size_q      <= data_size_d;
       rd_req_q         <= rd_req_d;
       rd_ack_q         <= rd_ack_d;
