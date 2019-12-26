@@ -186,6 +186,11 @@ begin
     jtag_rst_l = 1'b0;
     pll_rst_n = 1'b0;
 
+    if ($test$plusargs("vcd")) begin
+        $dumpfile("/home/movera/openpiton/build/file.vcd");
+        //$dumpall();
+        //$dumpvars();
+    end
     // Mostly DC signals set at start of boot
     clk_en = 1'b0;
     if ($test$plusargs("pll_en"))
@@ -433,7 +438,6 @@ system system(
         .rst_l     (`CORE_REF0.reset_l)
         );
 
-`ifndef MINIMAL_MONITORING
     integer j;
 
     // Tri: slam init is taken out because it's too complicated to extend to 64 cores
@@ -560,7 +564,6 @@ system system(
     manycore_network_mon network_mon (`CHIP_INT_CLK);
 `endif
 
-`endif // MINIMAL_MONITORING
 `endif // DISABLE_ALL_MONITORS
     // Alexey
     // UART monitor

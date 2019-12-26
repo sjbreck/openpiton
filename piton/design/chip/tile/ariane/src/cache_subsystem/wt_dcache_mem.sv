@@ -99,6 +99,7 @@ module wt_dcache_mem #(
   logic [63:0]                                                  wbuffer_cmp_addr;
 
   logic                                                         cmp_en_d, cmp_en_q;
+  logic                       [DCACHE_CL_IDX_WIDTH-1:0]         vld_addr_q;
   logic                                                         rd_acked;
   logic [NumPorts-1:0]                                          bank_collision, rd_req_masked, rd_req_prio;
 
@@ -223,13 +224,13 @@ module wt_dcache_mem #(
     .cnt_o   ( wbuffer_hit_idx  ),
     .empty_o (                  )
   );
-
+  wire rd_miss;
   lzc #(
     .WIDTH ( DCACHE_SET_ASSOC )
   ) i_lzc_rd_hit (
     .in_i    ( rd_hit_oh_o  ),
     .cnt_o   ( rd_hit_idx   ),
-    .empty_o (              )
+    .empty_o ( rd_miss       )
   );
 
   assign wbuffer_rdata = wbuffer_data_i[wbuffer_hit_idx].data;
@@ -276,7 +277,7 @@ module wt_dcache_mem #(
 
     assign tag_rdata[i]     = vld_tag_rdata[i][DCACHE_TAG_WIDTH-1:0];
     assign rd_vld_bits_o[i] = vld_tag_rdata[i][DCACHE_TAG_WIDTH];
-    assign rd_ever_hit_o[i] = hit_q[vld_addr][i];
+    assign rd_ever_hit_o[i] = hit_q[vld_addr_q][i];
 
     // Tag RAM
     sram #(
@@ -296,12 +297,13 @@ module wt_dcache_mem #(
 
     for (genvar j = 0; j < DCACHE_NUM_WORDS; j++) begin : gen_hit_bits
       wire set_indexed = (j[DCACHE_CL_IDX_WIDTH-1:0] == vld_addr);
+      wire set_indexed_q = (j[DCACHE_CL_IDX_WIDTH-1:0] == vld_addr_q);
       // Hit bits
       always_ff @(negedge rst_ni or posedge clk_i)
       if (!rst_ni) begin
         hit_q[j][i] <= 1'b0;
       end else begin
-        hit_q[j][i] <= rd_hit_oh_o[i] && set_indexed || hit_q[j][i] && !(vld_we && vld_req[i] && set_indexed);
+        hit_q[j][i] <= rd_hit_oh_o[i] && set_indexed_q || hit_q[j][i] && !(vld_we && vld_req[i] && set_indexed);
       end
     end
   end
@@ -312,11 +314,13 @@ module wt_dcache_mem #(
       bank_off_q <= '0;
       vld_sel_q  <= '0;
       cmp_en_q   <= '0;
+      vld_addr_q <= '0;
     end else begin
       bank_idx_q <= bank_idx_d;
       bank_off_q <= bank_off_d;
       vld_sel_q  <= vld_sel_d ;
       cmp_en_q   <= cmp_en_d;
+      vld_addr_q <= vld_addr;
     end
   end
 

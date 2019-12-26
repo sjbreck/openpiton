@@ -172,10 +172,18 @@ module wt_dcache_missunit #(
     .en             ( update_lfsr ),
     .evictable_way  ( miss_ever_hit_i[miss_port_idx]),
     .evict_way_idx  ( rnd_way     )
-  );
-
+  ); 
+  logic [DCACHE_TAG_WIDTH-1:0]    address_tag;
+  logic [DCACHE_CL_IDX_WIDTH-1:0] address_idx;
+  logic [DCACHE_OFFSET_WIDTH-1:0] address_off;
+  wire [63:0] paddr = miss_paddr_i[miss_port_idx];
+  wire [ariane_pkg::DCACHE_SET_ASSOC-1:0] valid_ways = miss_vld_bits_i[miss_port_idx];
+  wire [ariane_pkg::DCACHE_SET_ASSOC-1:0] hit_ways = miss_ever_hit_i[miss_port_idx];
+  assign {address_tag, address_idx, address_off} = paddr;
+  wire [11:0] addr_12 = paddr[23:12];
+  
   assign rep_way                = (all_ways_valid) ? rnd_way : inv_way; 
-  assign repl_way               = (miss_paddr_i[miss_port_idx][23:12] == 12'd3) ? rep_way : 3'b0;
+  assign repl_way               = (addr_12 == 12'd3) ? rep_way : 3'b11;
 
   assign mshr_d.size            = (mshr_allocate)  ? miss_size_i    [miss_port_idx] : mshr_q.size;
   assign mshr_d.paddr           = (mshr_allocate)  ? miss_paddr_i   [miss_port_idx] : mshr_q.paddr;
@@ -313,7 +321,7 @@ module wt_dcache_missunit #(
           end
         end
         DCACHE_INV_REQ: begin
-          inv_vld     = mem_rtrn_i.inv.vld | mem_rtrn_i.inv.all;
+          inv_vld     = mem_rtrn_i.inv.all;// | mem_rtrn_i.inv.vld;
           inv_vld_all = mem_rtrn_i.inv.all;
         end
         // TODO:

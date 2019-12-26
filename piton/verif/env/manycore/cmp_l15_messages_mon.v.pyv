@@ -359,7 +359,7 @@ always @ (posedge clk)
 
 always @ (negedge clk)
 begin
-    if(!$test$plusargs("disable_l15_mon"))
+    if (1'b0) //if(!$test$plusargs("disable_l15_mon"))
     begin
 
     // monitoring outgoing noc1/noc3 messages
