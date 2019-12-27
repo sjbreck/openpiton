@@ -26,6 +26,7 @@ module wt_dcache_ctrl #(
   input  dcache_req_i_t                   req_port_i,
   output dcache_req_o_t                   req_port_o,
   // interface to miss handler
+  input  logic				  srrip_conflict_i,
   output logic [13:0]                     miss_signature_o,
   output logic                            miss_req_o,
   input  logic                            miss_ack_i,
@@ -80,7 +81,7 @@ module wt_dcache_ctrl #(
   assign address_idx_d = (req_port_o.data_gnt) ? req_port_i.address_index[DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH] : address_idx_q;
   assign address_off_d = (req_port_o.data_gnt) ? req_port_i.address_index[DCACHE_OFFSET_WIDTH-1:0]                  : address_off_q;
   assign data_size_d   = (req_port_o.data_gnt) ? req_port_i.data_size                                               : data_size_q;
-  assign signature_o   = signature_d;	
+  assign signature_o   = signature_d; //signature sent out without checking hit/miss	
   assign rd_tag_o      = address_tag_d;
   assign rd_idx_o      = address_idx_d;
   assign rd_off_o      = address_off_d;
@@ -147,7 +148,7 @@ module wt_dcache_ctrl #(
             req_port_o.data_rvalid = 1'b1;
           end else if(req_port_i.tag_valid | state_q==REPLAY_READ) begin
             save_tag = (state_q!=REPLAY_READ);
-            if(wr_cl_vld_i || !rd_ack_q) begin
+            if(wr_cl_vld_i || !rd_ack_q || srrip_conflict_i) begin
               state_d = REPLAY_REQ;
             // we've got a hit
             end else if((|rd_hit_oh_i) && cache_en_i) begin

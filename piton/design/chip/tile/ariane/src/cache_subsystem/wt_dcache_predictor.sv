@@ -20,7 +20,7 @@ module wt_dcache_predictor #(
    input logic[13:0]	pred_shct_i, //this field is only necessary on a cache miss
    
    //output ports
-   output logic		pred_result_o
+   output logic[1:0]	pred_result_o
 );
 
 
@@ -28,7 +28,8 @@ module wt_dcache_predictor #(
  logic[1:0] shct_q[16383:0];
  
 //output prediction: 0 means distant reference, 1 means immedite reference
- assign pred_result_o = (shct_q[pred_shct_i] != 0);
+ assign pred_result_o = (shct_q[pred_shct_i] == 3)? 0:
+			(shct_q[pred_shct_i] != 0)? 2:3;
 // assign valid_o = shct_q[signature_i].valid;
 
  logic[1:0] sat_counter_hit;
@@ -52,18 +53,18 @@ module wt_dcache_predictor #(
       else begin
  	 shct_d[pred_miss_shct_i] = sat_counter_miss;
       end
-      if(pred_miss_i)begin
+      /*if(pred_miss_i)begin
 	 shct_d[pred_shct_i] = 0;
       end
       else begin
 	 shct_d[pred_shct_i] = shct_q[pred_shct_i];
-      end
+      end*/
  end
 
  for (genvar i=0; i< 16384; i++) begin: gen_ffs
 	always_ff @ (posedge clk_i or negedge rst_ni)begin:ff_shct
 		if(!rst_ni || flush_i)begin
-			shct_q[i] <= '0;
+			shct_q[i] <= 3;
 		end
 		else begin
 			shct_q[i] <= shct_d[i];

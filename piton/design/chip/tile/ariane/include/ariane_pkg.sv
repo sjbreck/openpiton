@@ -565,6 +565,7 @@ package ariane_pkg;
         logic [63:0]              vaddr;
         logic [63:0]              data;
         logic [7:0]               be;
+	logic [13:0]		  signature;
         fu_t                      fu;
         fu_op                     operator;
         logic [TRANS_ID_BITS-1:0] trans_id;

@@ -35,6 +35,7 @@ module wt_dcache_missunit #(
   input  amo_req_t                                   amo_req_i,
   output amo_resp_t                                  amo_resp_o,
   // miss handling interface (ld, ptw, wbuffer)
+  output logic 					     srrip_conflict_o,
   input  logic [NumPorts-1:0][13:0]		     miss_signature_i,
   input  logic [NumPorts-1:0]                        miss_req_i,
   output logic [NumPorts-1:0]                        miss_ack_o,
@@ -80,7 +81,16 @@ module wt_dcache_missunit #(
   input  logic					     pred_outcome_i,
   input  logic [13:0]				     pred_hit_shct_i,
   input  logic [13:0]				     pred_miss_shct_i,
-  input  logic [13:0]				     pred_shct_i
+  input  logic [13:0]				     pred_shct_i,
+
+  //input to lru
+  input logic					     lru_hit_i,
+  input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     lru_hit_idx_i,
+  input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]        lru_hit_way_i,
+  input logic					     lru_mshr_i,
+  input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     lru_mshr_idx_i,
+  input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]	     lru_mshr_way_i,
+  input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     lru_miss_idx_i
 );
 
   // controller FSM
@@ -100,7 +110,7 @@ module wt_dcache_missunit #(
   } mshr_t;
 
   mshr_t mshr_d, mshr_q;
-  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, rnd_way;
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, inv_way_pred, rnd_way, lru_way, srrip_way;
   logic mshr_vld_d, mshr_vld_q, mshr_vld_q1;
   logic mshr_allocate;
   logic update_lfsr, all_ways_valid;
@@ -157,7 +167,11 @@ module wt_dcache_missunit #(
 ///////////////////////////////////////////////////////
 // line prediction
 ///////////////////////////////////////////////////////
-logic 	pred_result;
+logic[1:0]  pred_result;
+logic[13:0] signature;
+
+assign signature = {miss_paddr_i[miss_port_idx][DCACHE_OFFSET_WIDTH+6:DCACHE_OFFSET_WIDTH],
+                   miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH+6:DCACHE_INDEX_WIDTH]};
 
 wt_dcache_predictor #(
    .Axi64BitCompliant(1'b0),
@@ -172,6 +186,7 @@ wt_dcache_predictor #(
    .pred_hit_shct_i     (pred_hit_shct_i),
    .pred_miss_shct_i    (pred_miss_shct_i),
    .pred_shct_i		(pred_shct_i),
+   //.pred_shct_i		(miss_signature_i[miss_port_idx]),
    .pred_result_o	(pred_result)
 ); 
 
@@ -188,6 +203,15 @@ wt_dcache_predictor #(
     .cnt_o   ( inv_way                         ),
     .empty_o ( all_ways_valid                  )
   );
+  
+  logic all_ways_valid_pred; 
+  lzc #(
+    .WIDTH ( ariane_pkg::DCACHE_SET_ASSOC )
+  ) i_lzc_inv_2 (
+    .in_i    ( ~mshr_q.vld_bits ),
+    .cnt_o   ( inv_way_pred                         ),
+    .empty_o ( all_ways_valid_pred             )
+  );
 
   // generate random cacheline index
   lfsr_8bit #(
@@ -200,6 +224,35 @@ wt_dcache_predictor #(
     .refill_way_bin ( rnd_way     )
   );
 
+  logic [DCACHE_CL_IDX_WIDTH-1:0] lru_miss_idx;
+  assign lru_miss_idx = miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH];
+  wt_dcache_lru(
+    .clk_i	    ( clk_i       	),
+    .rst_ni	    ( rst_ni      	),
+    .flush_i	    ( flush_i      	),
+    .lru_hit_i	    ( lru_hit_i   	),
+    .lru_hit_idx_i  ( lru_hit_idx_i     ),
+    .lru_hit_way_i  ( lru_hit_way_i     ),
+    .lru_miss_i	    ( write_signature_o ),
+    .lru_miss_idx_i ( wr_cl_idx_o       ),
+    .pred_result_i  ( pred_result       ),
+    .lru_way_o      ( lru_way		)
+  );
+  wt_dcache_srrip(
+    .clk_i	      ( clk_i       	  ),
+    .rst_ni	      ( rst_ni      	  ),
+    .flush_i	      ( flush_i      	  ),
+    .srrip_hit_i      ( lru_hit_i   	  ),
+    .srrip_hit_idx_i  ( lru_hit_idx_i     ),
+    .srrip_hit_way_i  ( lru_hit_way_i     ),
+    .srrip_miss_idx_i ( wr_cl_idx_o       ),
+    .srrip_miss_i     ( write_signature_o ), 
+    .pred_result_i    ( pred_result       ),
+    .srrip_way_o      ( srrip_way         ),
+    .srrip_conflict_o ( srrip_conflict_o    )
+  );
+
+
 
   /*plru #(
     .WAYS ( ariane_pkg::DCACHE_SET_ASSOC )
@@ -211,7 +264,8 @@ wt_dcache_predictor #(
     .evict_way_idx  ( rnd_way     )
   );*/
 
-  assign rep_way                = (all_ways_valid) ? rnd_way : inv_way; 
+  //test predictor with random policy
+  assign rep_way                = (all_ways_valid_pred) ? srrip_way : inv_way_pred; 
   assign repl_way               =  rep_way;
   //assign repl_way               = (miss_paddr_i[miss_port_idx][23:12] == 12'd3) ? rep_way : 3'b0;
  
@@ -352,7 +406,8 @@ wt_dcache_predictor #(
           end
         end
         DCACHE_INV_REQ: begin
-          inv_vld     = mem_rtrn_i.inv.vld | mem_rtrn_i.inv.all;
+	  inv_vld     = mem_rtrn_i.inv.all;// | mem_rtrn_i.inv.vld;
+          //inv_vld     = mem_rtrn_i.inv.vld | mem_rtrn_i.inv.all;
           inv_vld_all = mem_rtrn_i.inv.all;
         end
         // TODO:
@@ -379,18 +434,18 @@ wt_dcache_predictor #(
   assign wr_sig_we_o      = (flush_en   )   ? '1                    :           
                             (inv_vld_all)   ? '1                    :
                             (inv_vld    )   ? mem_rtrn_i.inv.way    :
-                            (cl_write_en)   ? mshr_q.repl_way	    :
+                            (cl_write_en)   ? repl_way	    :
                                             '0;
 
   assign wr_cl_we_o      = (flush_en   )  ? '1                                    :
                            (inv_vld_all)   ? '1                                    :
                            (inv_vld    )   ? dcache_way_bin2oh(mem_rtrn_i.inv.way) :
-                           (cl_write_en)   ? dcache_way_bin2oh(mshr_q.repl_way)    :
+                           (cl_write_en)   ? dcache_way_bin2oh(repl_way)    :
                                              '0;
 
   assign wr_vld_bits_o   = (flush_en   )   ? '0                                    :
                            (inv_vld    )   ? '0                                    :
-                           (cl_write_en)   ? dcache_way_bin2oh(mshr_q.repl_way)    :
+                           (cl_write_en)   ? dcache_way_bin2oh(repl_way)    :
                                               '0;
 
   assign wr_cl_idx_o     = (flush_en) ? cnt_q                                                        :

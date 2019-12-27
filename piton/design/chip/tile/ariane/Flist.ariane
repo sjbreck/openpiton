@@ -112,6 +112,8 @@ src/amo_buffer.sv
 src/store_unit.sv
 src/tlb.sv
 src/commit_stage.sv
+src/cache_subsystem/wt_dcache_srrip.sv
+src/cache_subsystem/wt_dcache_lru.sv
 src/cache_subsystem/wt_dcache_predictor.sv
 src/cache_subsystem/wt_dcache_ctrl.sv
 src/cache_subsystem/wt_dcache_mem.sv
