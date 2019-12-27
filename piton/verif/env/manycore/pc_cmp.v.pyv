@@ -394,7 +394,6 @@ task check_stub;
             `endif
             $display("Info->Simulation terminated by stub.");
             $display("%0d: Simulation -> PASS (HIT GOOD TRAP)", $time);
-            $display("MISS_COUNTER L1: %d", `CORE_REF0.ariane.i_perf_counters.perf_dl1);
             $finish;
         end
     end
@@ -496,6 +495,7 @@ always @(posedge clk)begin
                             `endif
                             $display("%0d: Simulation -> PASS (HIT GOOD TRAP)", $time);
                             $display("MISS_COUNTER L1: %d", `CORE_REF0.ariane.i_perf_counters.perf_dl1);
+                            $display("BW_COUNTER: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.bw_byte_count);
                             $finish;
                         end
                     end // if (active_thread[{0}])

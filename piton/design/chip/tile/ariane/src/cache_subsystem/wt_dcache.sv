@@ -56,6 +56,7 @@ module wt_dcache #(
   // miss unit <-> memory
   logic                           wr_cl_vld;
   logic                           wr_cl_nc;
+  logic                           wr_cl_line_upgraded;
   logic [DCACHE_SET_ASSOC-1:0]    wr_cl_we;
   logic [DCACHE_TAG_WIDTH-1:0]    wr_cl_tag;
   logic [DCACHE_CL_IDX_WIDTH-1:0] wr_cl_idx;
@@ -98,8 +99,8 @@ module wt_dcache #(
   logic [63:0]                                  rd_data;
   logic [DCACHE_SET_ASSOC-1:0]                  rd_vld_bits;
   logic [DCACHE_SET_ASSOC-1:0]                  rd_hit_oh;
-  logic [DCACHE_SET_ASSOC-1:0]                  rd_ever_hit,
-  logic [$clog2(DCACHE_SET_ASSOC)-1:0]          rd_rep_way,        // use this way in case of miss
+  logic [DCACHE_SET_ASSOC-1:0]                  rd_ever_hit;
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0]          rd_rep_way;        // use this way in case of miss
   logic                                         rd_rep_way_vld;   // force the way to be the one used in replace
 
   // miss unit <-> wbuffer
@@ -152,6 +153,7 @@ module wt_dcache #(
     // cache memory interface
     .wr_cl_vld_o        ( wr_cl_vld          ),
     .wr_cl_nc_o         ( wr_cl_nc           ),
+    .wr_cl_line_upgraded_o ( wr_cl_line_upgraded ),
     .wr_cl_we_o         ( wr_cl_we           ),
     .wr_cl_tag_o        ( wr_cl_tag          ),
     .wr_cl_idx_o        ( wr_cl_idx          ),
@@ -302,6 +304,7 @@ module wt_dcache #(
     // cacheline write port
     .wr_cl_vld_i       ( wr_cl_vld          ),
     .wr_cl_nc_i        ( wr_cl_nc           ),
+    .wr_cl_line_upgraded_i ( wr_cl_line_upgraded ),
     .wr_cl_we_i        ( wr_cl_we           ),
     .wr_cl_tag_i       ( wr_cl_tag          ),
     .wr_cl_idx_i       ( wr_cl_idx          ),

@@ -43,7 +43,7 @@ module wt_dcache_mem #(
   input  logic  [NumPorts-1:0]                              rd_tag_only_i,      // only do a tag/valid lookup, no access to data arrays
   input  logic  [NumPorts-1:0]                              rd_prio_i,          // 0: low prio, 1: high prio
   output logic  [NumPorts-1:0]                              rd_ack_o,
-  output logic                [DCACHE_SET_ASSOC-1:0] .      rd_vld_bits_o,
+  output logic                [DCACHE_SET_ASSOC-1:0]        rd_vld_bits_o,
   output logic                [DCACHE_SET_ASSOC-1:0]        rd_ever_hit_o,
   output logic                [DCACHE_SET_ASSOC-1:0]        rd_hit_oh_o,
   output logic        [$clog2(DCACHE_SET_ASSOC)-1:0]        rd_rep_way_o,        // use this way in case of miss
@@ -53,6 +53,7 @@ module wt_dcache_mem #(
   // only available on port 0, uses address signals of port 0
   input  logic                                              wr_cl_vld_i,
   input  logic                                              wr_cl_nc_i,         // noncacheable access
+  input  logic                                              wr_cl_line_upgraded_i, //loads the rest of the line
   input  logic                [DCACHE_SET_ASSOC-1:0]        wr_cl_we_i,         // writes a full cacheline
   input  logic                [DCACHE_TAG_WIDTH-1:0]        wr_cl_tag_i,
   input  logic                [DCACHE_CL_IDX_WIDTH-1:0]     wr_cl_idx_i,
@@ -136,7 +137,7 @@ module wt_dcache_mem #(
   assign rd_tag     = rd_tag_i[vld_sel_q]; //delayed by one cycle
   assign bank_off_d = (wr_cl_vld_i) ? wr_cl_off_i   : rd_off_i[vld_sel_d];
   assign vld_req    = (wr_cl_vld_i) ? wr_cl_we_i    : (rd_acked) ? '1 : '0;
-
+  wire [63:0] rd_paddr = {rd_tag, vld_addr_q, bank_off_q};
 
   // priority masking
   // disable low prio requests when any of the high prio reqs is present
@@ -211,6 +212,7 @@ module wt_dcache_mem #(
                                             {rd_tag, bank_idx_q, bank_off_q};
 
   wire [BANK_SEL_BITS-1:0] bank_sel = bank_off_q[DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS];
+  wire [BANK_SEL_BITS-1:0] wr_cl_bank_sel = wr_cl_off_i[DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS];
 
 
   logic [DCACHE_SET_ASSOC*DCACHE_NUM_BANKS-1:0] rd_vld_bits;
@@ -261,9 +263,9 @@ module wt_dcache_mem #(
   assign wbuffer_be    = (|wbuffer_hit_oh) ? wbuffer_data_i[wbuffer_hit_idx].valid : '0;
 
   if (Axi64BitCompliant) begin : gen_axi_off
-      assign wr_cl_off     = (wr_cl_nc_i) ? '0 : wr_cl_off_i[DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS];
+      assign wr_cl_off     = (wr_cl_nc_i) ? '0 : wr_cl_bank_sel;
   end else begin  : gen_piton_off
-      assign wr_cl_off     = wr_cl_off_i[DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS];
+      assign wr_cl_off     = wr_cl_bank_sel;
   end
 
   assign rdata         = (wr_cl_vld_i)  ? wr_cl_data_i[wr_cl_off*64 +: 64] :
@@ -278,7 +280,7 @@ module wt_dcache_mem #(
 // memory arrays and regs
 ///////////////////////////////////////////////////////
 
-  logic [DCACHE_TAG_WIDTH:0] vld_tag_rdata [DCACHE_SET_ASSOC-1:0];
+  logic [DCACHE_TAG_WIDTH+DCACHE_NUM_BANKS-1:0] vld_tag_rdata [DCACHE_SET_ASSOC-1:0];
 
   for (genvar k = 0; k < DCACHE_NUM_BANKS; k++) begin : gen_data_banks
     // Data RAM
@@ -296,9 +298,10 @@ module wt_dcache_mem #(
       .rdata_o    ( bank_rdata [k]      )
     );
   end
-
+  wire [DCACHE_NUM_BANKS-1:0] banks_write = {wr_cl_data_be_i[8] || wr_cl_line_upgraded_i,
+                                             wr_cl_data_be_i[0] || wr_cl_line_upgraded_i};
   for (genvar i = 0; i < DCACHE_SET_ASSOC; i++) begin : gen_tag_srams
-    wire [DCACHE_NUM_BANKS-1:0] valid_bits = {2{vld_wdata[i]}};
+    wire [DCACHE_NUM_BANKS-1:0] valid_bits = banks_write & {DCACHE_NUM_BANKS{vld_wdata[i]}};
     assign tag_rdata[i]     = vld_tag_rdata[i][DCACHE_TAG_WIDTH-1:0];
     assign rd_vld_bits[i*DCACHE_NUM_BANKS+:DCACHE_NUM_BANKS] = vld_tag_rdata[i][DCACHE_TAG_WIDTH+DCACHE_NUM_BANKS-1:DCACHE_TAG_WIDTH];
     assign rd_ever_hit_o[i] = hit_q[vld_addr_q][i];
@@ -368,18 +371,28 @@ module wt_dcache_mem #(
       else $fatal(1,"[l1 dcache] wbuffer_hit_oh signal must be hot1");
 
   // this is only used for verification!
-  logic                                    vld_mirror[wt_cache_pkg::DCACHE_NUM_WORDS-1:0][ariane_pkg::DCACHE_SET_ASSOC-1:0];
+  logic [1:0]                                   vld_mirror[wt_cache_pkg::DCACHE_NUM_WORDS-1:0][ariane_pkg::DCACHE_SET_ASSOC-1:0];
   logic [ariane_pkg::DCACHE_TAG_WIDTH-1:0] tag_mirror[wt_cache_pkg::DCACHE_NUM_WORDS-1:0][ariane_pkg::DCACHE_SET_ASSOC-1:0];
   logic [ariane_pkg::DCACHE_SET_ASSOC-1:0] tag_write_duplicate_test;
-
+  logic [31:0] bw_byte_count;
+  wire [4:0] bw_add;
+  assign bw_add = {1'b0, {4{wr_cl_data_be_i[0]}} & 4'd8} + {1'b0, {4{wr_cl_data_be_i[8]}} & 4'd8};
+  
   always_ff @(posedge clk_i or negedge rst_ni) begin : p_mirror
     if(!rst_ni) begin
       vld_mirror <= '{default:'0};
       tag_mirror <= '{default:'0};
+      bw_byte_count <= '{default:'0};
+      
     end else begin
+      if (vld_we) begin
+        bw_byte_count <= bw_byte_count + bw_add; 
+      end
+
       for (int i = 0; i < DCACHE_SET_ASSOC; i++) begin
         if(vld_req[i] & vld_we) begin
-          vld_mirror[vld_addr][i] <= vld_wdata[i];
+          vld_mirror[vld_addr][i] <= ({wr_cl_data_be_i[8], wr_cl_data_be_i[0]} | {2{wr_cl_line_upgraded_i}})
+                                       & {2{vld_wdata[i]}};
           tag_mirror[vld_addr][i] <= wr_cl_tag_i;
         end
       end
@@ -387,7 +400,7 @@ module wt_dcache_mem #(
   end
 
   for (genvar i = 0; i < DCACHE_SET_ASSOC; i++) begin : gen_tag_dubl_test
-      assign tag_write_duplicate_test[i] = (tag_mirror[vld_addr][i] == wr_cl_tag_i) & vld_mirror[vld_addr][i] & (|vld_wdata);
+      assign tag_write_duplicate_test[i] = (tag_mirror[vld_addr][i] == wr_cl_tag_i) & vld_mirror[vld_addr][i][wr_cl_bank_sel] & (|vld_wdata);
   end
 
   tag_write_duplicate: assert property (

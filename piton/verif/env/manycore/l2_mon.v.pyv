@@ -64,27 +64,41 @@ begin
 <%
     t = r'''
 
-    if (1'b0 && `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.cmp_en_q
+    if (1'b1 && `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.cmp_en_q
     && `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.vld_sel_q == 2'b01)
     begin
         $display("----MISS: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_miss);
-        $display("rd_tag: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_tag);
+        //$display("rd_tag: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_tag);
+        $display("rd_paddr: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_paddr);
         $display("rd_hits: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_ever_hit_o);
         $display("rd_valids: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_vld_bits_o);
-        $display("rd_oh: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_hit_oh_o);
+        $display("rd_valid_banks: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_vld_bits);
+        $display("rd_hit_oh: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_hit_oh_o);
+        $display("rd_tag_oh: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_tag_hit_oh);
         $display("rd_set: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.vld_addr_q);
         $display("------");
     end
 
+    if (1'b1 && `CORE_REF0.ariane.i_cache_subsystem.i_adapter.dcache_data_i
+    && `CORE_REF0.ariane.i_cache_subsystem.i_adapter.dcache_data_ack_o)
+    begin
+        $display("*******REQ size: %b", `CORE_REF0.ariane.i_cache_subsystem.i_adapter.dcache_data_i.size);
+        $display("req_paddr: %x", `CORE_REF0.ariane.i_cache_subsystem.i_adapter.dcache_data_i.paddr);
+        $display("*******");
+    end
+
 
     if (1'b1 && `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_cl_vld_i
-    && !`CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_cl_nc_i)
+       && |`CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_vld_bits_i)
     begin
         $display("===WRITE: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_cl_we_i);
-        $display("invalidate: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.inv_vld);
+        //$display("invalidate: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.inv_vld);
         $display("wr_valid_way: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_vld_bits_i);
         $display("wr_paddr: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wbuffer_cmp_addr);
+        $display("wr_data: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_cl_data_i);
         $display("wr_set: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_cl_idx_i);
+        $display("wr_bytes: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_cl_data_be_i);
+        $display("BW_COUNTER: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.bw_byte_count);
         $display("------");
     end
 
@@ -95,11 +109,12 @@ begin
         $display("m_paddr: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.paddr);
         //$display("m_addr12: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.addr_12);
         $display("m_repl_way: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.repl_way);
+        $display("m_final_way: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.final_way);
         $display("m_valid: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.valid_ways);
         //$display("m_rep_way: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.rep_way);
         //$display("m_inv_way: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.inv_way);
         $display("m_set: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.address_idx);
-        $display("m_tag: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.address_tag);
+        //$display("m_tag: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.address_tag);
         $display("+++++++++");
     end
 
@@ -109,9 +124,6 @@ begin
 
     if (`L2_TOP0.pipe1.ctrl.valid_S1 && ~`L2_TOP0.pipe1.ctrl.stall_S1)
     begin
-
-        $display("MISS_COUNTER: %d", `L2_TOP0.config_regs.l2_miss_counter_reg_f);
-        $display("MISS_COUNTER L1: %d", `CORE_REF0.ariane.i_perf_counters.perf_dl1);
         //$display("TILE0-------------------------------------");
         //$display($time);
         $write($time, " P1S1 msg type: ");

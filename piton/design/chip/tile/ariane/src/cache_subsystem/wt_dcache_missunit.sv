@@ -58,6 +58,7 @@ module wt_dcache_missunit #(
   // write interface to cache memory
   output logic                                       wr_cl_vld_o,        // writes a full cacheline
   output logic                                       wr_cl_nc_o,         // writes a full cacheline
+  output logic                                       wr_cl_line_upgraded_o, // writes the rest of a cacheline
   output logic [DCACHE_SET_ASSOC-1:0]                wr_cl_we_o,         // writes a full cacheline
   output logic [DCACHE_TAG_WIDTH-1:0]                wr_cl_tag_o,
   output logic [DCACHE_CL_IDX_WIDTH-1:0]             wr_cl_idx_o,
@@ -89,6 +90,7 @@ module wt_dcache_missunit #(
   } mshr_t;
 
   mshr_t mshr_d, mshr_q;
+  logic line_upgraded_d, line_upgraded_q;
   logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, rnd_way, final_way;
   logic mshr_vld_d, mshr_vld_q, mshr_vld_q1;
   logic mshr_allocate;
@@ -179,26 +181,47 @@ module wt_dcache_missunit #(
   logic [DCACHE_CL_IDX_WIDTH-1:0] address_idx;
   logic [DCACHE_OFFSET_WIDTH-1:0] address_off;
 
-  wire [63:0] paddr = miss_paddr_i[miss_port_idx];
-  wire [DCACHE_SET_ASSOC-1:0] valid_ways = miss_vld_bits_i[miss_port_idx];
-  wire [DCACHE_SET_ASSOC-1:0] hit_ways = miss_ever_hit_i[miss_port_idx];
-  wire [$clog2(DCACHE_SET_ASSOC)-1:0] miss_rep_way = miss_rep_way_i[miss_port_idx];
-  wire miss_rep_way_vld = miss_rep_way_vld_i[miss_port_idx]
+  wire [63:0] paddr;
+  assign paddr = miss_paddr_i[miss_port_idx];
+  wire [DCACHE_SET_ASSOC-1:0] valid_ways;
+  assign valid_ways = miss_vld_bits_i[miss_port_idx];
+  wire [DCACHE_SET_ASSOC-1:0] hit_way;
+  assign hit_way = miss_ever_hit_i[miss_port_idx];
+  wire [$clog2(DCACHE_SET_ASSOC)-1:0] miss_rep_way;
+  assign miss_rep_way = miss_rep_way_i[miss_port_idx];
+  wire miss_rep_way_vld;
+  assign miss_rep_way_vld = miss_rep_way_vld_i[miss_port_idx];
 
   assign {address_tag, address_idx, address_off} = paddr;
 
-  wire [11:0] addr_12 = paddr[23:12];
-  
+  // discern addr
+  wire [11:0] addr_12;
+  assign addr_12 = paddr[23:12];  
+  wire fine_grain;
+  assign fine_grain = (addr_12 == 12'd3);
+
+  // decide what is the size of the miss that we want to fetch
+  wire [2:0] tailored_size;
+  assign tailored_size          = (fine_grain) ? 3'b011 : 3'b111;
+  wire [2:0]  miss_size;
+  //assign miss_size              = (miss_nc_i[miss_port_idx]) ? miss_size_i[miss_port_idx] : tailored_size;
+  assign miss_size              = miss_size_i[miss_port_idx];
+
+  // calculate the way to replace
   assign rep_way                = (all_ways_valid) ? rnd_way : inv_way; 
-  assign repl_way               = (addr_12 == 12'd3) ? rep_way : 3'b11;
+  assign repl_way               = fine_grain ? rep_way : 2'b11;
   assign final_way              = miss_rep_way_vld ? miss_rep_way : repl_way;
 
-  assign mshr_d.size            = (mshr_allocate)  ? miss_size_i    [miss_port_idx] : mshr_q.size;
+  // if the response if to upgrade a line that only had one bank, we keep that one valid
+  assign line_upgraded_d        = (mshr_allocate)  ? miss_rep_way_vld : line_upgraded_q;
+
+  // set up the mshr struct
+  assign mshr_d.size            = (mshr_allocate)  ? miss_size  : mshr_q.size;
   assign mshr_d.paddr           = (mshr_allocate)  ? miss_paddr_i   [miss_port_idx] : mshr_q.paddr;
   assign mshr_d.vld_bits        = (mshr_allocate)  ? miss_vld_bits_i[miss_port_idx] : mshr_q.vld_bits;
   assign mshr_d.id              = (mshr_allocate)  ? miss_id_i      [miss_port_idx] : mshr_q.id;
   assign mshr_d.nc              = (mshr_allocate)  ? miss_nc_i      [miss_port_idx] : mshr_q.nc;
-  assign mshr_d.repl_way        = (mshr_allocate)  ? repl_way                       : mshr_q.repl_way;
+  assign mshr_d.repl_way        = (mshr_allocate)  ? final_way                      : mshr_q.repl_way;
   assign mshr_d.miss_port_idx   = (mshr_allocate)  ? miss_port_idx                  : mshr_q.miss_port_idx;
 
   // currently we only have one outstanding read TX, hence an incoming load clears the MSHR
@@ -252,9 +275,9 @@ module wt_dcache_missunit #(
   // outgoing memory requests (AMOs are always uncached)
   assign mem_data_o.tid    = (amo_sel) ? AmoTxId             : miss_id_i[miss_port_idx];
   assign mem_data_o.nc     = (amo_sel) ? 1'b1                : miss_nc_i[miss_port_idx];
-  assign mem_data_o.way    = (amo_sel) ? '0                  : repl_way;
+  assign mem_data_o.way    = (amo_sel) ? '0                  : final_way;
   assign mem_data_o.data   = (amo_sel) ? amo_data            : miss_wdata_i[miss_port_idx];
-  assign mem_data_o.size   = (amo_sel) ? amo_req_i.size      : miss_size_i [miss_port_idx];
+  assign mem_data_o.size   = (amo_sel) ? amo_req_i.size      : miss_size;
   assign mem_data_o.amo_op = (amo_sel) ? amo_req_i.amo_op    : AMO_NONE;
 
   assign tmp_paddr         = (amo_sel) ? amo_req_i.operand_a : miss_paddr_i[miss_port_idx];
@@ -370,8 +393,11 @@ module wt_dcache_missunit #(
   assign wr_cl_tag_o     = mshr_q.paddr[DCACHE_TAG_WIDTH+DCACHE_INDEX_WIDTH-1:DCACHE_INDEX_WIDTH];
   assign wr_cl_off_o     = mshr_q.paddr[DCACHE_OFFSET_WIDTH-1:0];
   assign wr_cl_data_o    = mem_rtrn_i.data;
-  assign wr_cl_data_be_o = (cl_write_en) ? '1 : '0;// we only write complete cachelines into the memory
-
+  
+  wire [2:0] size = mshr_q.size;
+  wire [15:0] w_bits = (size[2]) ? 16'hffff : (wr_cl_off_o[3] ? 16'hff00 : 16'h00ff);
+  assign wr_cl_data_be_o = (cl_write_en) ? w_bits : '0;// we only write complete cachelines into the memory
+  assign wr_cl_line_upgraded_o = cl_write_en && line_upgraded_q;
   // only NC responses write to the cache
   assign cl_write_en     = load_ack & ~mshr_q.nc;
 
@@ -541,6 +567,7 @@ always_ff @(posedge clk_i or negedge rst_ni) begin : p_regs
     mshr_vld_q            <= '0;
     mshr_vld_q1           <= '0;
     mshr_q                <= '0;
+    line_upgraded_q       <= '0;
     mshr_rdrd_collision_q <= '0;
     miss_req_masked_q     <= '0;
     amo_req_q             <= '0;
@@ -553,6 +580,7 @@ always_ff @(posedge clk_i or negedge rst_ni) begin : p_regs
     mshr_vld_q            <= mshr_vld_d;
     mshr_vld_q1           <= mshr_vld_q;
     mshr_q                <= mshr_d;
+    line_upgraded_q       <= line_upgraded_d;
     mshr_rdrd_collision_q <= mshr_rdrd_collision_d;
     miss_req_masked_q     <= miss_req_masked_d;
     amo_req_q             <= amo_req_d;
