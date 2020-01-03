@@ -72,7 +72,7 @@ module load_store_unit #(
     // signature generation for request in ex_stage
     logic [13:0] signature;
     //try out 1: signature as pc
-    assign signature = pc_i[13:0];
+    assign signature = inst_seq_i;
 
 
     // data is misaligned

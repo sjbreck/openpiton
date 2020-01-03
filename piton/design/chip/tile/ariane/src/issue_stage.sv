@@ -37,6 +37,7 @@ module issue_stage #(
     output logic                                     is_compressed_instr_o,
     input  logic                                     flu_ready_i,
     output logic                                     alu_valid_o,
+    output logic [13:0]				     inst_seq_o,
     // ex just resolved our predicted branch, we are ready to accept new requests
     input  logic                                     resolve_branch_i,
 
@@ -71,6 +72,28 @@ module issue_stage #(
     output scoreboard_entry_t [NR_COMMIT_PORTS-1:0]  commit_instr_o,
     input  logic              [NR_COMMIT_PORTS-1:0]  commit_ack_i
 );
+
+    // ---------------------------------------------------
+    // Construction instruction sequence history
+    // ---------------------------------------------------
+    logic [13:0] inst_seq_d, inst_seq_q;
+    logic isLS; //boolean indicate whether an instruction is load store or not
+    assign isLS = (decoded_instr_i.fu == ariane_pkg::LOAD 
+		   || decoded_instr_i.fu == ariane_pkg::STORE)? 1:0;
+    assign inst_seq_d = {isLS, inst_seq_q[13:1]};
+    always_ff @(posedge clk_i or negedge rst_ni)begin
+	if(~rst_ni)begin
+		inst_seq_q <= '0;
+		inst_seq_o <= '0; //one cycle delay version of inst_seq_q
+	end
+	else begin
+		inst_seq_q <= inst_seq_d;
+		inst_seq_o <= inst_seq_q;
+	end
+    end 
+
+	 
+    
     // ---------------------------------------------------
     // Scoreboard (SB) <-> Issue and Read Operands (IRO)
     // ---------------------------------------------------

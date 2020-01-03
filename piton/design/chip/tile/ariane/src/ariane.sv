@@ -70,6 +70,7 @@ module ariane #(
   logic                     issue_entry_valid_id_issue;
   logic                     is_ctrl_fow_id_issue;
   logic                     issue_instr_issue_id;
+  logic [13:0]		    inst_seq;
 
   // --------------
   // ISSUE <-> EX
@@ -288,6 +289,7 @@ module ariane #(
     .decoded_instr_valid_i      ( issue_entry_valid_id_issue   ),
     .is_ctrl_flow_i             ( is_ctrl_fow_id_issue         ),
     .decoded_instr_ack_o        ( issue_instr_issue_id         ),
+    .inst_seq_o			( inst_seq		       ),
     // Functional Units
     .fu_data_o                  ( fu_data_id_ex                ),
     .pc_o                       ( pc_id_ex                     ),
@@ -341,6 +343,7 @@ module ariane #(
     .fu_data_i              ( fu_data_id_ex               ),
     .pc_i                   ( pc_id_ex                    ),
     .is_compressed_instr_i  ( is_compressed_instr_id_ex   ),
+    .inst_seq_i		    ( inst_seq			  ),
     // fixed latency units
     .flu_result_o           ( flu_result_ex_id            ),
     .flu_trans_id_o         ( flu_trans_id_ex_id          ),
@@ -576,6 +579,7 @@ module ariane #(
     // to D$
     .clk_i                 ( clk_i                       ),
     .rst_ni                ( rst_ni                      ),
+    .pc_i                  ( pc_id_ex                    ),
     // I$
     .icache_en_i           ( icache_en_csr               ),
     .icache_flush_i        ( icache_flush_ctrl_cache     ),
