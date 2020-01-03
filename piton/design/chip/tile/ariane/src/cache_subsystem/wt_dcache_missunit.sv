@@ -35,6 +35,8 @@ module wt_dcache_missunit #(
   input  amo_req_t                                   amo_req_i,
   output amo_resp_t                                  amo_resp_o,
   // miss handling interface (ld, ptw, wbuffer)
+  output logic 					     srrip_conflict_o,
+  input  logic [NumPorts-1:0][13:0]		     miss_signature_i,
   input  logic [NumPorts-1:0]                        miss_req_i,
   output logic [NumPorts-1:0]                        miss_ack_o,
   input  logic [NumPorts-1:0]                        miss_nc_i,
@@ -56,6 +58,9 @@ module wt_dcache_missunit #(
   input  logic [DCACHE_MAX_TX-1:0][63:0]             tx_paddr_i,         // used to check for address collisions with read operations
   input  logic [DCACHE_MAX_TX-1:0]                   tx_vld_i,           // used to check for address collisions with read operations
   // write interface to cache memory
+  output logic [$clog2(DCACHE_SET_ASSOC)-1:0] 	     wr_sig_we_o,
+  output logic	                                     write_signature_o,        // enable signature writes
+  output logic [13:0]                                wr_cl_signature_o,        // writes a full cacheline
   output logic                                       wr_cl_vld_o,        // writes a full cacheline
   output logic                                       wr_cl_nc_o,         // writes a full cacheline
   output logic                                       wr_cl_line_upgraded_o, // writes the rest of a cacheline
@@ -71,7 +76,24 @@ module wt_dcache_missunit #(
   input  dcache_rtrn_t                               mem_rtrn_i,
   output logic                                       mem_data_req_o,
   input  logic                                       mem_data_ack_i,
-  output dcache_req_t                                mem_data_o
+  output dcache_req_t                                mem_data_o,
+ 
+  // predictor interface
+  input  logic					     pred_hit_i,
+  input  logic					     pred_miss_i,
+  input  logic					     pred_outcome_i,
+  input  logic [13:0]				     pred_hit_shct_i,
+  input  logic [13:0]				     pred_miss_shct_i,
+  input  logic [13:0]				     pred_shct_i,
+
+  //input to lru
+  input logic					     lru_hit_i,
+  input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     lru_hit_idx_i,
+  input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]        lru_hit_way_i,
+  input logic					     lru_mshr_i,
+  input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     lru_mshr_idx_i,
+  input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]	     lru_mshr_way_i,
+  input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     lru_miss_idx_i
 );
 
   // controller FSM
@@ -80,6 +102,7 @@ module wt_dcache_missunit #(
 
   // MSHR for reads
   typedef struct packed {
+    logic [13:0]			 signature;
     logic [63:0]                         paddr   ;
     logic [2:0]                          size    ;
     logic [DCACHE_SET_ASSOC-1:0]         vld_bits;
@@ -91,7 +114,7 @@ module wt_dcache_missunit #(
 
   mshr_t mshr_d, mshr_q;
   logic line_upgraded_d, line_upgraded_q;
-  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, rnd_way, final_way;
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, inv_way_pred, rnd_way, lru_way, srrip_way, final_way;
   logic mshr_vld_d, mshr_vld_q, mshr_vld_q1;
   logic mshr_allocate;
   logic update_lfsr, all_ways_valid;
@@ -114,6 +137,8 @@ module wt_dcache_missunit #(
   logic [NumPorts-1:0] mshr_rdrd_collision_d, mshr_rdrd_collision_q;
   logic [NumPorts-1:0] mshr_rdrd_collision;
   logic tx_rdwr_collision, mshr_rdwr_collision;
+
+
 
 ///////////////////////////////////////////////////////
 // input arbitration and general control sigs
@@ -144,6 +169,33 @@ module wt_dcache_missunit #(
   end
 
 ///////////////////////////////////////////////////////
+// line prediction
+///////////////////////////////////////////////////////
+logic[1:0]  pred_result;
+logic[13:0] signature;
+
+assign signature = {miss_paddr_i[miss_port_idx][DCACHE_OFFSET_WIDTH+6:DCACHE_OFFSET_WIDTH],
+                   miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH+6:DCACHE_INDEX_WIDTH]};
+
+wt_dcache_predictor #(
+   .Axi64BitCompliant(1'b0),
+   .NumPorts(3)
+)(
+   .clk_i		(clk_i),
+   .rst_ni		(rst_ni),
+   .flush_i		(flush_i),
+   .pred_hit_i  	(pred_hit_i),
+   .pred_miss_i 	(pred_miss_i),
+   .pred_outcome_i	(pred_outcome_i),
+   .pred_hit_shct_i     (pred_hit_shct_i),
+   .pred_miss_shct_i    (pred_miss_shct_i),
+   .pred_shct_i		(pred_shct_i),
+   //.pred_shct_i		(miss_signature_i[miss_port_idx]),
+   .pred_result_o	(pred_result)
+); 
+
+
+///////////////////////////////////////////////////////
 // MSHR and way replacement logic (only for read ops)
 ///////////////////////////////////////////////////////
 
@@ -155,9 +207,18 @@ module wt_dcache_missunit #(
     .cnt_o   ( inv_way                         ),
     .empty_o ( all_ways_valid                  )
   );
-/*
+  
+  logic all_ways_valid_pred; 
+  lzc #(
+    .WIDTH ( ariane_pkg::DCACHE_SET_ASSOC )
+  ) i_lzc_inv_2 (
+    .in_i    ( ~mshr_q.vld_bits ),
+    .cnt_o   ( inv_way_pred                         ),
+    .empty_o ( all_ways_valid_pred             )
+  );
+
   // generate random cacheline index
-  lfsr_8bit #(
+  /*lfsr_8bit #(
     .WIDTH ( ariane_pkg::DCACHE_SET_ASSOC )
   ) i_lfsr_inv (
     .clk_i          ( clk_i       ),
@@ -165,8 +226,37 @@ module wt_dcache_missunit #(
     .en_i           ( update_lfsr ),
     .refill_way_oh  (             ),
     .refill_way_bin ( rnd_way     )
+  );*/
+
+  logic [DCACHE_CL_IDX_WIDTH-1:0] lru_miss_idx;
+  assign lru_miss_idx = miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH];
+  wt_dcache_lru(
+    .clk_i	    ( clk_i       	),
+    .rst_ni	    ( rst_ni      	),
+    .flush_i	    ( flush_i      	),
+    .lru_hit_i	    ( lru_hit_i   	),
+    .lru_hit_idx_i  ( lru_hit_idx_i     ),
+    .lru_hit_way_i  ( lru_hit_way_i     ),
+    .lru_miss_i	    ( write_signature_o ),
+    .lru_miss_idx_i ( wr_cl_idx_o       ),
+    .pred_result_i  ( pred_result       ),
+    .lru_way_o      ( lru_way		)
   );
-*/
+  wt_dcache_srrip(
+    .clk_i	      ( clk_i       	  ),
+    .rst_ni	      ( rst_ni      	  ),
+    .flush_i	      ( flush_i      	  ),
+    .srrip_hit_i      ( lru_hit_i   	  ),
+    .srrip_hit_idx_i  ( lru_hit_idx_i     ),
+    .srrip_hit_way_i  ( lru_hit_way_i     ),
+    .srrip_miss_idx_i ( wr_cl_idx_o       ),
+    .srrip_miss_i     ( write_signature_o ), 
+    .pred_result_i    ( pred_result       ),
+    .srrip_way_o      ( srrip_way         ),
+    .srrip_conflict_o ( srrip_conflict_o    )
+  );
+
+
 
   plru #(
     .WAYS ( ariane_pkg::DCACHE_SET_ASSOC )
@@ -176,7 +266,8 @@ module wt_dcache_missunit #(
     .en             ( update_lfsr ),
     .evictable_way  ( miss_ever_hit_i[miss_port_idx]),
     .evict_way_idx  ( rnd_way     )
-  ); 
+  );
+
   logic [DCACHE_TAG_WIDTH-1:0]    address_tag;
   logic [DCACHE_CL_IDX_WIDTH-1:0] address_idx;
   logic [DCACHE_OFFSET_WIDTH-1:0] address_off;
@@ -205,11 +296,13 @@ module wt_dcache_missunit #(
   assign tailored_size          = (fine_grain) ? 3'b011 : 3'b111;
   wire [2:0]  miss_size;
   //assign miss_size              = (miss_nc_i[miss_port_idx]) ? miss_size_i[miss_port_idx] : tailored_size;
-  assign miss_size              = miss_size_i[miss_port_idx];
+  //assign miss_size              = miss_size_i[miss_port_idx];
+  assign miss_size = 8;
 
   // calculate the way to replace
   assign rep_way                = (all_ways_valid) ? rnd_way : inv_way; 
-  assign repl_way               = fine_grain ? rep_way : 2'b11;
+  assign repl_way		= rep_way;
+  //assign repl_way               = fine_grain ? rep_way : 2'b11;
   assign final_way              = miss_rep_way_vld ? miss_rep_way : repl_way;
 
   // if the response if to upgrade a line that only had one bank, we keep that one valid
@@ -278,6 +371,7 @@ module wt_dcache_missunit #(
   assign mem_data_o.way    = (amo_sel) ? '0                  : final_way;
   assign mem_data_o.data   = (amo_sel) ? amo_data            : miss_wdata_i[miss_port_idx];
   assign mem_data_o.size   = (amo_sel) ? amo_req_i.size      : miss_size;
+  //assign mem_data_o.size   = (amo_sel) ? amo_req_i.size      : miss_size_i [miss_port_idx];
   assign mem_data_o.amo_op = (amo_sel) ? amo_req_i.amo_op    : AMO_NONE;
 
   assign tmp_paddr         = (amo_sel) ? amo_req_i.operand_a : miss_paddr_i[miss_port_idx];
@@ -372,28 +466,36 @@ module wt_dcache_missunit #(
 ///////////////////////////////////////////////////////
 
   // cacheline write port
+  assign write_signature_o = cl_write_en;
   assign wr_cl_nc_o      = mshr_q.nc;
   assign wr_cl_vld_o     = load_ack | (| wr_cl_we_o);
+
+  assign wr_sig_we_o      = (flush_en   )   ? '1                    :           
+                            (inv_vld_all)   ? '1                    :
+                            (inv_vld    )   ? mem_rtrn_i.inv.way    :
+                            (cl_write_en)   ? repl_way	    :
+                                            '0;
 
   assign wr_cl_we_o      = (flush_en   )  ? '1                                    :
                            (inv_vld_all)   ? '1                                    :
                            (inv_vld    )   ? dcache_way_bin2oh(mem_rtrn_i.inv.way) :
-                           (cl_write_en)   ? dcache_way_bin2oh(mshr_q.repl_way)    :
+                           (cl_write_en)   ? dcache_way_bin2oh(final_way)    :
                                              '0;
 
   assign wr_vld_bits_o   = (flush_en   )   ? '0                                    :
                            (inv_vld    )   ? '0                                    :
-                           (cl_write_en)   ? dcache_way_bin2oh(mshr_q.repl_way)    :
+                           (cl_write_en)   ? dcache_way_bin2oh(final_way)    :
                                               '0;
 
   assign wr_cl_idx_o     = (flush_en) ? cnt_q                                                        :
                            (inv_vld)  ? mem_rtrn_i.inv.idx[DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH] :
                                         mshr_q.paddr[DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH];
-
+  assign wr_cl_signature_o = mshr_q.signature;
   assign wr_cl_tag_o     = mshr_q.paddr[DCACHE_TAG_WIDTH+DCACHE_INDEX_WIDTH-1:DCACHE_INDEX_WIDTH];
   assign wr_cl_off_o     = mshr_q.paddr[DCACHE_OFFSET_WIDTH-1:0];
   assign wr_cl_data_o    = mem_rtrn_i.data;
-  
+  //assign wr_cl_data_be_o = (cl_write_en) ? '1 : '0;// we only write complete cachelines into the memory
+
   wire [2:0] size = mshr_q.size;
   wire [15:0] w_bits = (size[2]) ? 16'hffff : (wr_cl_off_o[3] ? 16'hff00 : 16'h00ff);
   assign wr_cl_data_be_o = (cl_write_en) ? w_bits : '0;// we only write complete cachelines into the memory

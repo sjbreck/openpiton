@@ -36,6 +36,7 @@ module wt_dcache_mem #(
   input  logic                                              rst_ni,
 
   // ports
+  input  logic  [NumPorts-1:0][13:0]			 signature_i,		// coupled with tag
   input  logic  [NumPorts-1:0][DCACHE_TAG_WIDTH-1:0]        rd_tag_i,           // tag in - comes one cycle later
   input  logic  [NumPorts-1:0][DCACHE_CL_IDX_WIDTH-1:0]     rd_idx_i,
   input  logic  [NumPorts-1:0][DCACHE_OFFSET_WIDTH-1:0]     rd_off_i,
@@ -51,6 +52,9 @@ module wt_dcache_mem #(
   output logic                [63:0]                        rd_data_o,
 
   // only available on port 0, uses address signals of port 0
+  input  logic 		      [$clog2(DCACHE_SET_ASSOC)-1:0]wr_sig_we_i,
+  input  logic                                              write_signature_i,
+  input  logic                [13:0]                        wr_cl_signature_i,
   input  logic                                              wr_cl_vld_i,
   input  logic                                              wr_cl_nc_i,         // noncacheable access
   input  logic                                              wr_cl_line_upgraded_i, //loads the rest of the line
@@ -71,7 +75,25 @@ module wt_dcache_mem #(
   input  logic                [7:0]                         wr_data_be_i,
 
   // forwarded wbuffer
-  input wbuffer_t             [DCACHE_WBUF_DEPTH-1:0]       wbuffer_data_i
+  input wbuffer_t             [DCACHE_WBUF_DEPTH-1:0]       wbuffer_data_i,
+
+  //output to predictor
+  output logic						    pred_hit_o,
+  output logic						    pred_miss_o,
+  output logic						    pred_outcome_o,
+  output logic		      [13:0]			    pred_hit_shct_o, //signature that hitted
+  output logic		      [13:0]			    pred_miss_shct_o, //signature that missed
+  output logic		      [13:0]			    pred_shct_o, // signature used for predict
+
+  //output to lru
+  output logic						    lru_hit_o,
+  output logic		      [DCACHE_CL_IDX_WIDTH-1:0]	    lru_hit_idx_o,
+  output logic		      [$clog2(DCACHE_SET_ASSOC)-1:0]lru_hit_way_o,
+  output logic						    lru_mshr_o,
+  output logic		      [DCACHE_CL_IDX_WIDTH-1:0]	    lru_mshr_idx_o,
+  output logic		      [$clog2(DCACHE_SET_ASSOC)-1:0]lru_mshr_way_o,
+  output logic		      [DCACHE_CL_IDX_WIDTH-1:0]	    lru_miss_idx_o
+
 );
 
   logic [DCACHE_NUM_BANKS-1:0]                                  bank_req;
@@ -85,6 +107,7 @@ module wt_dcache_mem #(
   logic [DCACHE_NUM_BANKS-1:0][DCACHE_SET_ASSOC-1:0][63:0]      bank_rdata;                   //
   logic [DCACHE_SET_ASSOC-1:0][63:0]                            rdata_cl;                     // selected word from each cacheline
 
+  logic [13:0]					       signature_arbit;			      // 3 input signatures arbitrated one by one
   logic [DCACHE_TAG_WIDTH-1:0]                                  rd_tag;
   logic [DCACHE_SET_ASSOC-1:0]                                  vld_req;                      // bit enable for valid regs
   logic                                                         vld_we;                       // valid bits write enable
@@ -108,6 +131,113 @@ module wt_dcache_mem #(
 
   localparam BANK_SIZE_BITS = 3; // a bank is 8 bytes
   localparam BANK_SEL_BITS = $clog2(DCACHE_NUM_BANKS);
+///////////////////////////////////////////////////////
+// Signature Array
+///////////////////////////////////////////////////////
+logic[13:0] sig_array_d [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+logic[13:0] sig_array_q [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+logic [13:0] signature;
+assign signature = {wr_cl_idx_i[6:0],wr_cl_tag_i[6:0]};
+//ff array of signatures
+
+logic store_sig[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
+	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_ways_comb
+		assign store_sig[i][j] = (write_signature_i && wr_cl_idx_i==i && wr_sig_we_i==j)?
+					 1:0; 
+		assign sig_array_d[i][j] = store_sig[i][j] ? wr_cl_signature_i
+					   :sig_array_q[i][j];
+	end
+end
+
+for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs
+	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_ways
+		always_ff @(negedge rst_ni or posedge clk_i) begin: gen_reg_arrays
+			if(!rst_ni)begin
+				sig_array_q[i][j] <= '0;
+			end
+			else begin
+				sig_array_q[i][j] <= sig_array_d[i][j];
+			end
+		end
+	end
+end
+
+///////////////////////////////////////////////////////
+// Outcome Array
+///////////////////////////////////////////////////////
+logic outcome_d [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+logic [$clog2(DCACHE_SET_ASSOC)-1:0]  rd_hit_idx;
+logic outcome_q [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+
+logic update_outcome_on_hit[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+logic update_outcome_on_miss[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_outcome_idxs_bool
+	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_ways_bool
+
+		assign update_outcome_on_hit[i][j] = ((rd_hit_idx[j]) && vld_addr==i)?
+					      	      1:0; 
+		
+		assign update_outcome_on_miss[i][j] = (write_signature_i && wr_cl_idx_i==i 
+						       && wr_sig_we_i==j)? 1:0;
+		
+		assign outcome_d[i][j] = update_outcome_on_hit[i][j] ? 
+					  1: update_outcome_on_miss[i][j]?
+					  0: outcome_q[i][j];
+	end
+end
+
+for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_outcome_ff_idxs
+	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_outcome_ff_ways
+		always_ff @(negedge rst_ni or posedge clk_i) begin: gen_outcome_ff_arrays
+			if(!rst_ni)begin
+				outcome_q[i][j] <= '0;
+			end
+			else begin
+				outcome_q[i][j] <= outcome_d[i][j];
+			end
+		end
+	end
+end
+
+///////////////////////////////////////////////////////
+// Predictor Interface
+///////////////////////////////////////////////////////
+
+//logic [$clog2(DCACHE_SET_ASSOC)-1:0]  rd_hit_idx;
+assign pred_hit_o = |rd_hit_oh_o; //hit on a tag read
+assign pred_miss_o = write_signature_i;
+assign pred_shct_o = (write_signature_i)? wr_cl_signature_i:'0;
+
+always_comb begin: output_to_predictor
+	if(pred_hit_o)begin
+		pred_hit_shct_o = sig_array_q[vld_addr][rd_hit_idx];
+	end
+	else begin
+		pred_hit_shct_o = '0;
+	end
+	if(pred_miss_o)begin
+		pred_miss_shct_o = sig_array_q[wr_cl_idx_i][wr_sig_we_i];
+		pred_outcome_o = outcome_q[wr_cl_idx_i][wr_sig_we_i];
+	end
+	else begin
+		pred_miss_shct_o = '0;
+		pred_outcome_o = '0;
+	end
+end
+
+///////////////////////////////////////////////////////
+// LRU/SRRIP Interface
+///////////////////////////////////////////////////////
+assign lru_hit_o = |rd_hit_oh_o;
+assign lru_mshr_o = write_signature_i;
+assign lru_hit_idx_o = vld_addr;
+assign lru_mshr_idx_o = wr_cl_idx_i;
+assign lru_hit_way_o = rd_hit_idx;
+assign lru_mshr_way_o = wr_sig_we_i;
+assign lru_miss_idx_o = vld_addr;
+
+
 ///////////////////////////////////////////////////////
 // arbiter
 ///////////////////////////////////////////////////////
@@ -134,7 +264,8 @@ module wt_dcache_mem #(
   assign vld_wdata  = wr_vld_bits_i;
   assign vld_addr   = (wr_cl_vld_i) ? wr_cl_idx_i   : rd_idx_i[vld_sel_d];
   assign bank_idx_d = (wr_cl_vld_i) ? wr_cl_idx_i   : rd_idx_i[vld_sel_d];
-  assign rd_tag     = rd_tag_i[vld_sel_q]; //delayed by one cycle
+  assign rd_tag     = rd_tag_i[vld_sel_q]; //delayed by one cycle //comes only from CPU
+  assign signature_arbit = signature_i[vld_sel_q]; //delayed by one cycle
   assign bank_off_d = (wr_cl_vld_i) ? wr_cl_off_i   : rd_off_i[vld_sel_d];
   assign vld_req    = (wr_cl_vld_i) ? wr_cl_we_i    : (rd_acked) ? '1 : '0;
   wire [63:0] rd_paddr = {rd_tag, vld_addr_q, bank_off_q};
@@ -172,6 +303,7 @@ module wt_dcache_mem #(
     bank_idx = '{default:wr_idx_i};
 
     for(int k=0; k<NumPorts; k++) begin
+      //bank_collision[k] = rd_off_i[k][DCACHE_OFFSET_WIDTH-1:3] == wr_off_i[DCACHE_OFFSET_WIDTH-1:3];
       bank_collision[k] = rd_off_i[k][DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS] == wr_off_i[DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS];
     end
 
@@ -182,6 +314,8 @@ module wt_dcache_mem #(
     end else begin
       if(rd_acked) begin
         if(!rd_tag_only_i[vld_sel_d]) begin
+          //bank_req                                               = dcache_cl_bin2oh(rd_off_i[vld_sel_d][DCACHE_OFFSET_WIDTH-1:3]);
+          //bank_idx[rd_off_i[vld_sel_d][DCACHE_OFFSET_WIDTH-1:3]] = rd_idx_i[vld_sel_d];
           bank_req                                               = dcache_cl_bin2oh(rd_off_i[vld_sel_d][DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS]);
           bank_idx[rd_off_i[vld_sel_d][DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS]] = rd_idx_i[vld_sel_d];
         end
@@ -192,6 +326,8 @@ module wt_dcache_mem #(
           wr_ack_o = 1'b1;
           bank_req |= dcache_cl_bin2oh(wr_off_i[DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS]);
           bank_we   = dcache_cl_bin2oh(wr_off_i[DCACHE_OFFSET_WIDTH-1:BANK_SIZE_BITS]);
+          //bank_req |= dcache_cl_bin2oh(wr_off_i[DCACHE_OFFSET_WIDTH-1:3]);
+          //bank_we   = dcache_cl_bin2oh(wr_off_i[DCACHE_OFFSET_WIDTH-1:3]);
         end
       end
     end
@@ -203,7 +339,7 @@ module wt_dcache_mem #(
 
   logic [DCACHE_OFFSET_WIDTH-1:0]       wr_cl_off;
   logic [$clog2(DCACHE_WBUF_DEPTH)-1:0] wbuffer_hit_idx;
-  logic [$clog2(DCACHE_SET_ASSOC)-1:0]  rd_hit_idx;
+  //logic [$clog2(DCACHE_SET_ASSOC)-1:0]  rd_hit_idx;
 
   assign cmp_en_d = (|vld_req) & ~vld_we;
 
@@ -220,10 +356,12 @@ module wt_dcache_mem #(
   // hit generation
   for (genvar i=0;i<DCACHE_SET_ASSOC;i++) begin : gen_tag_cmpsel
     // tag comparison of ways >0
+    //assign rd_hit_oh_o[i] = (rd_tag == tag_rdata[i]) & rd_vld_bits_o[i]  & cmp_en_q;
     assign rd_tag_hit_oh[i] = (rd_tag == tag_rdata[i]) && cmp_en_q;
     assign rd_hit_oh_o[i] = rd_tag_hit_oh[i] && rd_vld_bits[i*DCACHE_NUM_BANKS+bank_sel];
     assign rd_vld_bits_o[i] = |rd_vld_bits[i*DCACHE_NUM_BANKS+:DCACHE_NUM_BANKS];
     // byte offset mux of ways >0
+    //assign rdata_cl[i] = bank_rdata[bank_off_q[DCACHE_OFFSET_WIDTH-1:3]][i];
     assign rdata_cl[i] = bank_rdata[bank_sel][i];
   end
 
@@ -259,12 +397,15 @@ module wt_dcache_mem #(
  // if the bank that hits is the one we are looking up, then its a cache hit and the rep_way is ignored
   assign rd_rep_way_vld_o = !rd_tag_miss && rd_vld_bits_o[rd_rep_way_o];
 
+
   assign wbuffer_rdata = wbuffer_data_i[wbuffer_hit_idx].data;
   assign wbuffer_be    = (|wbuffer_hit_oh) ? wbuffer_data_i[wbuffer_hit_idx].valid : '0;
 
   if (Axi64BitCompliant) begin : gen_axi_off
       assign wr_cl_off     = (wr_cl_nc_i) ? '0 : wr_cl_bank_sel;
+      //assign wr_cl_off     = (wr_cl_nc_i) ? '0 : wr_cl_off_i[DCACHE_OFFSET_WIDTH-1:3];
   end else begin  : gen_piton_off
+      //assign wr_cl_off     = wr_cl_off_i[DCACHE_OFFSET_WIDTH-1:3];
       assign wr_cl_off     = wr_cl_bank_sel;
   end
 
@@ -281,6 +422,7 @@ module wt_dcache_mem #(
 ///////////////////////////////////////////////////////
 
   logic [DCACHE_TAG_WIDTH+DCACHE_NUM_BANKS-1:0] vld_tag_rdata [DCACHE_SET_ASSOC-1:0];
+  //logic [DCACHE_TAG_WIDTH:0] vld_tag_rdata [DCACHE_SET_ASSOC-1:0];
 
   for (genvar k = 0; k < DCACHE_NUM_BANKS; k++) begin : gen_data_banks
     // Data RAM
@@ -305,11 +447,12 @@ module wt_dcache_mem #(
     assign tag_rdata[i]     = vld_tag_rdata[i][DCACHE_TAG_WIDTH-1:0];
     assign rd_vld_bits[i*DCACHE_NUM_BANKS+:DCACHE_NUM_BANKS] = vld_tag_rdata[i][DCACHE_TAG_WIDTH+DCACHE_NUM_BANKS-1:DCACHE_TAG_WIDTH];
     assign rd_ever_hit_o[i] = hit_q[vld_addr_q][i];
-
+    //assign rd_vld_bits_o[i] = vld_tag_rdata[i][DCACHE_TAG_WIDTH];
     // Tag RAM
     sram #(
       // tag + valid bit
       .DATA_WIDTH ( ariane_pkg::DCACHE_TAG_WIDTH + DCACHE_NUM_BANKS ),
+      //.DATA_WIDTH ( ariane_pkg::DCACHE_TAG_WIDTH + 1 ),
       .NUM_WORDS  ( wt_cache_pkg::DCACHE_NUM_WORDS   )
     ) i_tag_sram (
       .clk_i     ( clk_i               ),
@@ -318,6 +461,7 @@ module wt_dcache_mem #(
       .we_i      ( vld_we              ),
       .addr_i    ( vld_addr            ),
       .wdata_i   ( {valid_bits, wr_cl_tag_i} ),
+      //.wdata_i   ( {vld_wdata[i], wr_cl_tag_i} ),
       .be_i      ( '1                  ),
       .rdata_o   ( vld_tag_rdata[i]    )
     );
@@ -331,6 +475,7 @@ module wt_dcache_mem #(
         hit_q[j][i] <= 1'b0;
       end else begin
         hit_q[j][i] <= rd_hit_oh_o[i] && set_indexed_q || hit_q[j][i] && !(vld_we && vld_req[i] && set_indexed);
+        //hit_q[j][i] <= rd_hit_oh_o[i] && set_indexed || hit_q[j][i] && !(vld_we && vld_req[i] && set_indexed);
       end
     end
   end
@@ -372,12 +517,14 @@ module wt_dcache_mem #(
 
   // this is only used for verification!
   logic [1:0]                                   vld_mirror[wt_cache_pkg::DCACHE_NUM_WORDS-1:0][ariane_pkg::DCACHE_SET_ASSOC-1:0];
+  //logic                                    vld_mirror[wt_cache_pkg::DCACHE_NUM_WORDS-1:0][ariane_pkg::DCACHE_SET_ASSOC-1:0];
   logic [ariane_pkg::DCACHE_TAG_WIDTH-1:0] tag_mirror[wt_cache_pkg::DCACHE_NUM_WORDS-1:0][ariane_pkg::DCACHE_SET_ASSOC-1:0];
   logic [ariane_pkg::DCACHE_SET_ASSOC-1:0] tag_write_duplicate_test;
   logic [31:0] bw_byte_count;
   wire [4:0] bw_add;
   assign bw_add = {1'b0, {4{wr_cl_data_be_i[0]}} & 4'd8} + {1'b0, {4{wr_cl_data_be_i[8]}} & 4'd8};
   
+
   always_ff @(posedge clk_i or negedge rst_ni) begin : p_mirror
     if(!rst_ni) begin
       vld_mirror <= '{default:'0};
@@ -393,6 +540,7 @@ module wt_dcache_mem #(
         if(vld_req[i] & vld_we) begin
           vld_mirror[vld_addr][i] <= ({wr_cl_data_be_i[8], wr_cl_data_be_i[0]} | {2{wr_cl_line_upgraded_i}})
                                        & {2{vld_wdata[i]}};
+          //vld_mirror[vld_addr][i] <= vld_wdata[i];
           tag_mirror[vld_addr][i] <= wr_cl_tag_i;
         end
       end
@@ -401,6 +549,7 @@ module wt_dcache_mem #(
 
   for (genvar i = 0; i < DCACHE_SET_ASSOC; i++) begin : gen_tag_dubl_test
       assign tag_write_duplicate_test[i] = (tag_mirror[vld_addr][i] == wr_cl_tag_i) & vld_mirror[vld_addr][i][wr_cl_bank_sel] & (|vld_wdata);
+      //assign tag_write_duplicate_test[i] = (tag_mirror[vld_addr][i] == wr_cl_tag_i) & vld_mirror[vld_addr][i] & (|vld_wdata);
   end
 
   tag_write_duplicate: assert property (
