@@ -110,7 +110,7 @@ module wt_dcache_missunit #(
   } mshr_t;
 
   mshr_t mshr_d, mshr_q;
-  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, inv_way_pred, rnd_way, lru_way, srrip_way;
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, inv_way_pred, rnd_way, lru_way, srrip_way, plru_way;
   logic mshr_vld_d, mshr_vld_q, mshr_vld_q1;
   logic mshr_allocate;
   logic update_lfsr, all_ways_valid;
@@ -238,6 +238,18 @@ wt_dcache_predictor #(
     .pred_result_i  ( pred_result       ),
     .lru_way_o      ( lru_way		)
   );
+  wt_dcache_plru(
+    .clk_i	     ( clk_i       	 ),
+    .rst_ni	     ( rst_ni      	 ),
+    .flush_i	     ( flush_i      	 ),
+    .plru_hit_i	     ( lru_hit_i   	 ),
+    .plru_hit_idx_i  ( lru_hit_idx_i     ),
+    .plru_hit_way_i  ( lru_hit_way_i     ),
+    .plru_miss_i     ( write_signature_o ),
+    .plru_miss_idx_i ( wr_cl_idx_o       ),
+    .pred_result_i   ( pred_result       ),
+    .plru_way_o      ( plru_way		 )
+  );
   wt_dcache_srrip(
     .clk_i	      ( clk_i       	  ),
     .rst_ni	      ( rst_ni      	  ),
@@ -261,11 +273,11 @@ wt_dcache_predictor #(
     .reset_n        ( rst_ni      ),
     .en             ( update_lfsr ),
     .evictable_way  ( miss_ever_hit_i[miss_port_idx]),
-    .evict_way_idx  ( rnd_way     )
+    .evict_way_idx  ( plru_way     )
   );*/
 
   //test predictor with random policy
-  assign rep_way                = (all_ways_valid_pred) ? srrip_way : inv_way_pred; 
+  assign rep_way                = (all_ways_valid_pred) ? plru_way : inv_way_pred; 
   assign repl_way               =  rep_way;
   //assign repl_way               = (miss_paddr_i[miss_port_idx][23:12] == 12'd3) ? rep_way : 3'b0;
  
