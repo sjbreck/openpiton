@@ -107,6 +107,13 @@ module wt_dcache #(
   logic [DCACHE_MAX_TX-1:0][63:0]               tx_paddr;
   logic [DCACHE_MAX_TX-1:0]                     tx_vld;
 
+  logic                   pred_hit;
+  logic                   pred_miss;
+  logic                   pred_outcome;
+  logic [13:0]            pred_hit_shct;
+  logic [13:0]            pred_miss_shct;
+  logic [13:0]            pred_shct;
+
   // wbuffer <-> memory
   wbuffer_t [DCACHE_WBUF_DEPTH-1:0]             wbuffer_data;
 
@@ -161,7 +168,14 @@ module wt_dcache #(
     .wr_cl_data_o       ( wr_cl_data         ),
     .wr_cl_data_be_o    ( wr_cl_data_be      ),
     .wr_vld_bits_o      ( wr_vld_bits        ),
-    // memory interface
+    // predictor interface
+    .pred_hit_i         ( pred_hit ),
+    .pred_miss_i        ( pred_miss ),
+    .pred_outcome_i     ( pred_outcome ),
+    .pred_hit_shct_i    ( pred_hit_shct ),
+    .pred_miss_shct_i   ( pred_miss_shct ),
+    .pred_shct_i        ( pred_shct ),
+   // memory interface
     .mem_rtrn_vld_i     ( mem_rtrn_vld_i     ),
     .mem_rtrn_i         ( mem_rtrn_i         ),
     .mem_data_req_o     ( mem_data_req_o     ),
@@ -319,6 +333,13 @@ module wt_dcache #(
     .wr_off_i          ( wr_off             ),
     .wr_data_i         ( wr_data            ),
     .wr_data_be_i      ( wr_data_be         ),
+    // predictor interface
+    .pred_hit_o         ( pred_hit ),
+    .pred_miss_o        ( pred_miss ),
+    .pred_outcome_o     ( pred_outcome ),
+    .pred_hit_shct_o    ( pred_hit_shct ),
+    .pred_miss_shct_o   ( pred_miss_shct ),
+    .pred_shct_o        ( pred_shct ),
     // write buffer forwarding
     .wbuffer_data_i    ( wbuffer_data       )
   );

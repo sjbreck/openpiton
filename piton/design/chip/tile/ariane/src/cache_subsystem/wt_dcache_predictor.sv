@@ -23,13 +23,12 @@ module wt_dcache_predictor #(
    output logic[1:0]	pred_result_o
 );
 
-
  logic[1:0] shct_d[16383:0];
  logic[1:0] shct_q[16383:0];
  
 //output prediction: 0 means distant reference, 1 means immedite reference
- assign pred_result_o = (shct_q[pred_shct_i] == 3)? 0:
-			(shct_q[pred_shct_i] != 0)? 2:3;
+ assign pred_result_o = (shct_q[pred_shct_i] == 3) ? 0:
+			(shct_q[pred_shct_i] != 0)? 2 : 3;
 // assign valid_o = shct_q[signature_i].valid;
 
  logic[1:0] sat_counter_hit;
@@ -39,19 +38,21 @@ module wt_dcache_predictor #(
       shct_d = shct_q;
       sat_counter_hit = shct_q[pred_hit_shct_i];
       sat_counter_miss = shct_q[pred_miss_shct_i];
+      
       if(pred_hit_i)begin
-	 if(sat_counter_hit==3) shct_d[pred_hit_shct_i] = 3;
-	 else shct_d[pred_hit_shct_i] = sat_counter_hit + 1;
+	      if(sat_counter_hit==3) shct_d[pred_hit_shct_i] = 3;
+	      else shct_d[pred_hit_shct_i] = sat_counter_hit + 1;
       end
       else begin
-	 shct_d[pred_hit_shct_i] = sat_counter_hit;
+	      shct_d[pred_hit_shct_i] = sat_counter_hit;
       end
-      if(pred_miss_i && pred_outcome_i==0)begin
-	 if(sat_counter_miss == 0) shct_d[pred_miss_shct_i] = 0;
-	 else shct_d[pred_miss_shct_i] = sat_counter_miss - 1;
+
+      if(pred_miss_i && !pred_outcome_i)begin
+	      if(sat_counter_miss == 0) shct_d[pred_miss_shct_i] = 0;
+	      else shct_d[pred_miss_shct_i] = sat_counter_miss - 1;
       end
       else begin
- 	 shct_d[pred_miss_shct_i] = sat_counter_miss;
+ 	      shct_d[pred_miss_shct_i] = sat_counter_miss;
       end
       /*if(pred_miss_i)begin
 	 shct_d[pred_shct_i] = 0;
