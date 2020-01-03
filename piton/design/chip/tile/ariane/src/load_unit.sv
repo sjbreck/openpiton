@@ -38,6 +38,7 @@ module load_unit (
     output logic [11:0]              page_offset_o,
     input  logic                     page_offset_matches_i,
     // D$ interface
+//    input [13:0]		     signature_i,
     input dcache_req_o_t             req_port_i,
     output dcache_req_i_t            req_port_o
 );
@@ -56,6 +57,7 @@ module load_unit (
     assign page_offset_o = lsu_ctrl_i.vaddr[11:0];
     // feed-through the virtual address for VA translation
     assign vaddr_o = lsu_ctrl_i.vaddr;
+    assign req_port_o.signature = lsu_ctrl_i.signature;
     // this is a read-only interface so set the write enable to 0
     assign req_port_o.data_we = 1'b0;
     assign req_port_o.data_wdata = '0;
@@ -81,6 +83,7 @@ module load_unit (
         translation_req_o    = 1'b0;
         req_port_o.data_req  = 1'b0;
         // tag control
+	//req_port_o.signature = 14'b0;
         req_port_o.kill_req  = 1'b0;
         req_port_o.tag_valid = 1'b0;
         req_port_o.data_be   = lsu_ctrl_i.be;
@@ -159,6 +162,7 @@ module load_unit (
             end
             // we know for sure that the tag we want to send is valid
             SEND_TAG: begin
+		//req_port_o.signature = signature_i;
                 req_port_o.tag_valid = 1'b1;
                 state_d = IDLE;
                 // we can make a new request here if we got one

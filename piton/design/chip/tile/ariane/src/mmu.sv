@@ -57,6 +57,7 @@ module mmu #(
         output logic                            itlb_miss_o,
         output logic                            dtlb_miss_o,
         // PTW memory interface
+        input  logic [13:0]			signature_i,
         input  dcache_req_o_t                   req_port_i,
         output dcache_req_i_t                   req_port_o
 );
@@ -151,6 +152,7 @@ module mmu #(
         .dtlb_hit_i             ( dtlb_lu_hit           ),
         .dtlb_vaddr_i           ( lsu_vaddr_i           ),
 
+	.signature_i	       ( signature_i	        ),
         .req_port_i            ( req_port_i             ),
         .req_port_o            ( req_port_o             ),
 

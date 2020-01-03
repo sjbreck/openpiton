@@ -242,6 +242,18 @@ wt_dcache_predictor #(
     .pred_result_i  ( pred_result       ),
     .lru_way_o      ( lru_way		)
   );
+  wt_dcache_plru(
+    .clk_i	     ( clk_i       	 ),
+    .rst_ni	     ( rst_ni      	 ),
+    .flush_i	     ( flush_i      	 ),
+    .plru_hit_i	     ( lru_hit_i   	 ),
+    .plru_hit_idx_i  ( lru_hit_idx_i     ),
+    .plru_hit_way_i  ( lru_hit_way_i     ),
+    .plru_miss_i     ( write_signature_o ),
+    .plru_miss_idx_i ( wr_cl_idx_o       ),
+    .pred_result_i   ( pred_result       ),
+    .plru_way_o      ( plru_way		 )
+  );
   wt_dcache_srrip(
     .clk_i	      ( clk_i       	  ),
     .rst_ni	      ( rst_ni      	  ),

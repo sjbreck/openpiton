@@ -39,6 +39,7 @@ module store_buffer (
     input  logic [1:0]   data_size_i,     // type of request we are making (e.g.: bytes to write)
 
     // D$ interface
+    input  logic[13:0]    signature_i,
     input  dcache_req_o_t req_port_i,
     output dcache_req_i_t req_port_o
 );
@@ -47,6 +48,7 @@ module store_buffer (
     // 1. Speculative queue
     // 2. Commit queue which is non-speculative, e.g.: the store will definitely happen.
     struct packed {
+	logic [13:0] signature;
         logic [63:0] address;
         logic [63:0] data;
         logic [7:0]  be;
@@ -83,6 +85,7 @@ module store_buffer (
         // LSU interface
         // we are ready to accept a new entry and the input data is valid
         if (valid_i) begin
+            speculative_queue_n[speculative_write_pointer_q].signature = signature_i;
             speculative_queue_n[speculative_write_pointer_q].address   = paddr_i;
             speculative_queue_n[speculative_write_pointer_q].data      = data_i;
             speculative_queue_n[speculative_write_pointer_q].be        = be_i;
@@ -128,6 +131,7 @@ module store_buffer (
     assign req_port_o.tag_valid = 1'b0;
 
     // those signals can directly be output to the memory
+    assign req_port_o.signature     = commit_queue_q[commit_read_pointer_q].signature;
     assign req_port_o.address_index = commit_queue_q[commit_read_pointer_q].address[ariane_pkg::DCACHE_INDEX_WIDTH-1:0];
     // if we got a new request we already saved the tag from the previous cycle
     assign req_port_o.address_tag   = commit_queue_q[commit_read_pointer_q].address[ariane_pkg::DCACHE_TAG_WIDTH     +

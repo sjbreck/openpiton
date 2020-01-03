@@ -112,6 +112,10 @@ src/amo_buffer.sv
 src/store_unit.sv
 src/tlb.sv
 src/commit_stage.sv
+src/cache_subsystem/wt_dcache_srrip.sv
+src/cache_subsystem/wt_dcache_plru.sv
+src/cache_subsystem/wt_dcache_lru.sv
+src/cache_subsystem/wt_dcache_predictor.sv
 src/cache_subsystem/wt_dcache_ctrl.sv
 src/cache_subsystem/wt_dcache_mem.sv
 src/cache_subsystem/wt_dcache_missunit.sv
@@ -120,6 +124,7 @@ src/cache_subsystem/wt_dcache.sv
 src/cache_subsystem/wt_icache.sv
 src/cache_subsystem/wt_l15_adapter.sv
 src/cache_subsystem/wt_cache_subsystem.sv
+src/cache_subsystem/plru.sv
 src/clint/clint.sv
 src/clint/axi_lite_interface.sv
 src/riscv-dbg/src/dm_csrs.sv

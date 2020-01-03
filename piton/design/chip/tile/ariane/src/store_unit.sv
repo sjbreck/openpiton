@@ -43,6 +43,8 @@ module store_unit (
     // D$ interface
     output amo_req_t                 amo_req_o,
     input  amo_resp_t                amo_resp_i,
+
+    //input  logic[13:0]		     signature_i,
     input  dcache_req_o_t            req_port_i,
     output dcache_req_i_t            req_port_o
 );
@@ -66,6 +68,7 @@ module store_unit (
     logic [63:0]  st_data_n,      st_data_q;
     logic [7:0]   st_be_n,        st_be_q;
     logic [1:0]   st_data_size_n, st_data_size_q;
+    logic [13:0]  st_signature_n, st_signature_q;
     amo_t         amo_op_d,       amo_op_q;
 
     logic [TRANS_ID_BITS-1:0] trans_id_n, trans_id_q;
@@ -179,6 +182,7 @@ module store_unit (
     // re-align the write data to comply with the address offset
     always_comb begin
         st_be_n   = lsu_ctrl_i.be;
+	st_signature_n = lsu_ctrl_i.signature;
         // don't shift the data if we are going to perform an AMO as we still need to operate on this data
         st_data_n = instr_is_amo ? lsu_ctrl_i.data
                                  : data_align(lsu_ctrl_i.vaddr[2:0], lsu_ctrl_i.data);
@@ -233,6 +237,8 @@ module store_unit (
         .data_i                ( st_data_q              ),
         .be_i                  ( st_be_q                ),
         .data_size_i           ( st_data_size_q         ),
+
+	.signature_i	       ( st_signature_q		),
         .req_port_i            ( req_port_i             ),
         .req_port_o            ( req_port_o             )
     );
@@ -264,9 +270,11 @@ module store_unit (
             st_data_size_q <= '0;
             trans_id_q     <= '0;
             amo_op_q       <= AMO_NONE;
+	    st_signature_q <= '0;
         end else begin
             state_q        <= state_d;
             st_be_q        <= st_be_n;
+	    st_signature_q <= st_signature_n;
             st_data_q      <= st_data_n;
             trans_id_q     <= trans_id_n;
             st_data_size_q <= st_data_size_n;

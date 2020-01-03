@@ -27,6 +27,7 @@ module ex_stage #(
     input  logic [63:0]                            pc_i,                  // PC of current instruction
     input  logic                                   is_compressed_instr_i, // we need to know if this was a compressed instruction
                                                                           // in order to calculate the next PC on a mis-predict
+    input  logic [13:0]				   inst_seq_i,
     // Fixed latency unit(s)
     output logic [63:0]                            flu_result_o,
     output logic [TRANS_ID_BITS-1:0]               flu_trans_id_o,        // ID of scoreboard entry at which to write back
@@ -261,6 +262,8 @@ module ex_stage #(
         .clk_i,
         .rst_ni,
         .flush_i,
+	.pc_i,
+	.inst_seq_i,
         .no_st_pending_o,
         .fu_data_i             ( lsu_data ),
         .lsu_ready_o,
