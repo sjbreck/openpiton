@@ -36,7 +36,6 @@ module wt_dcache_mem #(
   input  logic                                              rst_ni,
 
   // ports
-  input  logic  [NumPorts-1:0][13:0]			 signature_i,		// coupled with tag
   input  logic  [NumPorts-1:0][DCACHE_TAG_WIDTH-1:0]        rd_tag_i,           // tag in - comes one cycle later
   input  logic  [NumPorts-1:0][DCACHE_CL_IDX_WIDTH-1:0]     rd_idx_i,
   input  logic  [NumPorts-1:0][DCACHE_OFFSET_WIDTH-1:0]     rd_off_i,
@@ -75,21 +74,17 @@ module wt_dcache_mem #(
   input wbuffer_t             [DCACHE_WBUF_DEPTH-1:0]       wbuffer_data_i,
 
   //output to predictor
-  output logic						    pred_hit_o,
-  output logic						    pred_miss_o,
   output logic						    pred_outcome_o,
   output logic		      [13:0]			    pred_hit_shct_o, //signature that hitted
   output logic		      [13:0]			    pred_miss_shct_o, //signature that missed
-  output logic		      [13:0]			    pred_shct_o, // signature used for predict
 
-  //output to lru
-  output logic						    lru_hit_o,
-  output logic		      [DCACHE_CL_IDX_WIDTH-1:0]	    lru_hit_idx_o,
-  output logic		      [$clog2(DCACHE_SET_ASSOC)-1:0]lru_hit_way_o,
-  output logic						    lru_mshr_o,
+  //output to policies
+  output logic						    hit_o,
+  output logic		      [DCACHE_CL_IDX_WIDTH-1:0]	    hit_idx_o,
+  output logic		      [$clog2(DCACHE_SET_ASSOC)-1:0]hit_way_o
+  /*output logic						    lru_mshr_o,
   output logic		      [DCACHE_CL_IDX_WIDTH-1:0]	    lru_mshr_idx_o,
-  output logic		      [$clog2(DCACHE_SET_ASSOC)-1:0]lru_mshr_way_o,
-  output logic		      [DCACHE_CL_IDX_WIDTH-1:0]	    lru_miss_idx_o
+  output logic		      [$clog2(DCACHE_SET_ASSOC)-1:0]lru_mshr_way_o,*/
 
 );
 
@@ -104,7 +99,6 @@ module wt_dcache_mem #(
   logic [DCACHE_NUM_BANKS-1:0][DCACHE_SET_ASSOC-1:0][63:0]      bank_rdata;                   //
   logic [DCACHE_SET_ASSOC-1:0][63:0]                            rdata_cl;                     // selected word from each cacheline
 
-  logic [13:0]					       signature_arbit;			      // 3 input signatures arbitrated one by one
   logic [DCACHE_TAG_WIDTH-1:0]                                  rd_tag;
   logic [DCACHE_SET_ASSOC-1:0]                                  vld_req;                      // bit enable for valid regs
   logic                                                         vld_we;                       // valid bits write enable
@@ -160,8 +154,11 @@ end
 ///////////////////////////////////////////////////////
 // Outcome Array
 ///////////////////////////////////////////////////////
-logic outcome_d [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 logic [$clog2(DCACHE_SET_ASSOC)-1:0]  rd_hit_idx;
+assign hit_o = |rd_hit_oh_o;
+assign hit_idx_o = rd_idx_i[vld_sel_d];
+assign hit_way_o = rd_hit_idx;
+logic outcome_d [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 logic outcome_q [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 
 logic update_outcome_on_hit[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
@@ -169,7 +166,7 @@ logic update_outcome_on_miss[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_outcome_idxs_bool
 	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_ways_bool
 
-		assign update_outcome_on_hit[i][j] = ((rd_hit_idx[j]) && vld_addr==i)?
+		assign update_outcome_on_hit[i][j] = ((hit_way_o == j) && hit_idx_o==i)?
 					      	      1:0; 
 		
 		assign update_outcome_on_miss[i][j] = (write_signature_i && wr_cl_idx_i==i 
@@ -198,19 +195,14 @@ end
 // Predictor Interface
 ///////////////////////////////////////////////////////
 
-//logic [$clog2(DCACHE_SET_ASSOC)-1:0]  rd_hit_idx;
-assign pred_hit_o = |rd_hit_oh_o; //hit on a tag read
-assign pred_miss_o = write_signature_i;
-assign pred_shct_o = (write_signature_i)? wr_cl_signature_i:'0;
-
 always_comb begin: output_to_predictor
-	if(pred_hit_o)begin
-		pred_hit_shct_o = sig_array_q[vld_addr][rd_hit_idx];
+	if(hit_o)begin
+		pred_hit_shct_o = sig_array_q[hit_idx_o][hit_way_o];
 	end
 	else begin
 		pred_hit_shct_o = '0;
 	end
-	if(pred_miss_o)begin
+	if(write_signature_i)begin
 		pred_miss_shct_o = sig_array_q[wr_cl_idx_i][wr_sig_we_i];
 		pred_outcome_o = outcome_q[wr_cl_idx_i][wr_sig_we_i];
 	end
@@ -219,18 +211,6 @@ always_comb begin: output_to_predictor
 		pred_outcome_o = '0;
 	end
 end
-
-///////////////////////////////////////////////////////
-// LRU/SRRIP Interface
-///////////////////////////////////////////////////////
-assign lru_hit_o = |rd_hit_oh_o;
-assign lru_mshr_o = write_signature_i;
-assign lru_hit_idx_o = vld_addr;
-assign lru_mshr_idx_o = wr_cl_idx_i;
-assign lru_hit_way_o = rd_hit_idx;
-assign lru_mshr_way_o = wr_sig_we_i;
-assign lru_miss_idx_o = vld_addr;
-
 
 ///////////////////////////////////////////////////////
 // arbiter
@@ -259,7 +239,6 @@ assign lru_miss_idx_o = vld_addr;
   assign vld_addr   = (wr_cl_vld_i) ? wr_cl_idx_i   : rd_idx_i[vld_sel_d];
   assign bank_idx_d = (wr_cl_vld_i) ? wr_cl_idx_i   : rd_idx_i[vld_sel_d];
   assign rd_tag     = rd_tag_i[vld_sel_q]; //delayed by one cycle //comes only from CPU
-  assign signature_arbit = signature_i[vld_sel_q]; //delayed by one cycle
   assign bank_off_d = (wr_cl_vld_i) ? wr_cl_off_i   : rd_off_i[vld_sel_d];
   assign vld_req    = (wr_cl_vld_i) ? wr_cl_we_i    : (rd_acked) ? '1 : '0;
 
