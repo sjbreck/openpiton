@@ -35,7 +35,6 @@ module wt_dcache_missunit #(
   input  amo_req_t                                   amo_req_i,
   output amo_resp_t                                  amo_resp_o,
   // miss handling interface (ld, ptw, wbuffer)
-  output logic 					     srrip_conflict_o,
   input  logic [NumPorts-1:0][13:0]		     miss_signature_i,
   input  logic [NumPorts-1:0]                        miss_req_i,
   output logic [NumPorts-1:0]                        miss_ack_o,
@@ -79,21 +78,18 @@ module wt_dcache_missunit #(
   output dcache_req_t                                mem_data_o,
  
   // predictor interface
-  input  logic					         pred_hit_i,
-  input  logic					         pred_miss_i,
-  input  logic					         pred_outcome_i,
+  input  logic					     pred_outcome_i,
   input  logic [13:0]				     pred_hit_shct_i,
   input  logic [13:0]				     pred_miss_shct_i,
-  input  logic [13:0]				     pred_shct_i,
 
   //input to lru
-  input logic					     lru_hit_i,
-  input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     lru_hit_idx_i,
-  input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]  lru_hit_way_i,
-  input logic					                         lru_mshr_i,
+  input logic					     hit_i,
+  input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     hit_idx_i,
+  input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]        hit_way_i
+  /*input logic					     lru_mshr_i,
   input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     lru_mshr_idx_i,
-  input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]	 lru_mshr_way_i,
-  input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     lru_miss_idx_i
+  input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]	     lru_mshr_way_i,
+  input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     lru_miss_idx_i*/
 );
 
   // controller FSM
@@ -113,11 +109,10 @@ module wt_dcache_missunit #(
   } mshr_t;
 
   mshr_t mshr_d, mshr_q;
-  logic line_upgraded_d, line_upgraded_q;
-  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, inv_way_pred, rnd_way, lru_way, srrip_way, final_way;
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, rnd_way, lru_way, srrip_way, plru_way;
   logic mshr_vld_d, mshr_vld_q, mshr_vld_q1;
   logic mshr_allocate;
-  logic update_lfsr, all_ways_valid;
+  logic update_lfsr, all_ways_valid, miss;
 
   logic enable_d, enable_q;
   logic flush_ack_d, flush_ack_q;
@@ -179,19 +174,17 @@ wt_dcache_predictor #(
    .Axi64BitCompliant(1'b0),
    .NumPorts(3)
 )(
-   .clk_i	  	    (clk_i),
-   .rst_ni		    (rst_ni),
-   .flush_i	    	(flush_i),
-   .pred_hit_i  	(pred_hit_i),
-   .pred_miss_i 	(pred_miss_i),
+   .clk_i		(clk_i),
+   .rst_ni		(rst_ni),
+   .flush_i		(flush_i),
+   .pred_hit_i  	(hit_i),
+   .pred_miss_i 	(cl_write_en),
    .pred_outcome_i	(pred_outcome_i),
    .pred_hit_shct_i     (pred_hit_shct_i),
    .pred_miss_shct_i    (pred_miss_shct_i),
-   .pred_shct_i		(pred_shct_i),
-   //.pred_shct_i		(miss_signature_i[miss_port_idx]),
+   .pred_shct_i		(signature),
    .pred_result_o	(pred_result)
 ); 
-
 
 ///////////////////////////////////////////////////////
 // MSHR and way replacement logic (only for read ops)
@@ -206,15 +199,6 @@ wt_dcache_predictor #(
     .empty_o ( all_ways_valid                  )
   );
   
-  logic all_ways_valid_pred; 
-  lzc #(
-    .WIDTH ( ariane_pkg::DCACHE_SET_ASSOC )
-  ) i_lzc_inv_2 (
-    .in_i    ( ~mshr_q.vld_bits ),
-    .cnt_o   ( inv_way_pred                         ),
-    .empty_o ( all_ways_valid_pred             )
-  );
-
   // generate random cacheline index
   /*lfsr_8bit #(
     .WIDTH ( ariane_pkg::DCACHE_SET_ASSOC )
@@ -226,9 +210,9 @@ wt_dcache_predictor #(
     .refill_way_bin ( rnd_way     )
   );*/
 
-  logic [DCACHE_CL_IDX_WIDTH-1:0] lru_miss_idx;
-  assign lru_miss_idx = miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH];
-  wt_dcache_lru(
+  logic [DCACHE_CL_IDX_WIDTH-1:0] miss_idx;
+  assign miss_idx = miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH];
+  /*wt_dcache_lru(
     .clk_i	    ( clk_i       	),
     .rst_ni	    ( rst_ni      	),
     .flush_i	    ( flush_i      	),
@@ -251,19 +235,18 @@ wt_dcache_predictor #(
     .plru_miss_idx_i ( wr_cl_idx_o       ),
     .pred_result_i   ( pred_result       ),
     .plru_way_o      ( plru_way		 )
-  );
+  );*/
   wt_dcache_srrip(
     .clk_i	      ( clk_i       	  ),
     .rst_ni	      ( rst_ni      	  ),
     .flush_i	      ( flush_i      	  ),
-    .srrip_hit_i      ( lru_hit_i   	  ),
-    .srrip_hit_idx_i  ( lru_hit_idx_i     ),
-    .srrip_hit_way_i  ( lru_hit_way_i     ),
-    .srrip_miss_idx_i ( wr_cl_idx_o       ),
-    .srrip_miss_i     ( write_signature_o ), 
+    .srrip_hit_i      ( hit_i   	  ),
+    .srrip_hit_idx_i  ( hit_idx_i         ),
+    .srrip_hit_way_i  ( hit_way_i         ),
+    .srrip_miss_idx_i ( miss_idx          ),
+    .srrip_miss_i     ( mshr_allocate     ), 
     .pred_result_i    ( pred_result       ),
-    .srrip_way_o      ( srrip_way         ),
-    .srrip_conflict_o ( srrip_conflict_o    )
+    .srrip_way_o      ( srrip_way         )
   );
 
   plru #(
@@ -281,16 +264,18 @@ wt_dcache_predictor #(
   logic [DCACHE_OFFSET_WIDTH-1:0] address_off;
 
   wire [63:0] paddr;
-  assign paddr = miss_paddr_i[miss_port_idx];
-  wire [DCACHE_SET_ASSOC-1:0] valid_ways;
-  assign valid_ways = miss_vld_bits_i[miss_port_idx];
   wire [DCACHE_SET_ASSOC-1:0] hit_way;
-  assign hit_way = miss_ever_hit_i[miss_port_idx];
+  wire [DCACHE_SET_ASSOC-1:0] valid_ways;
   wire [$clog2(DCACHE_SET_ASSOC)-1:0] miss_rep_way;
-  assign miss_rep_way = miss_rep_way_i[miss_port_idx];
+  wire [2:0]  miss_size;
   wire miss_rep_way_vld;
+  
+  assign paddr = miss_paddr_i[miss_port_idx];
+  assign valid_ways = miss_vld_bits_i[miss_port_idx];
+  assign hit_way = miss_ever_hit_i[miss_port_idx];
+  assign miss_rep_way = miss_rep_way_i[miss_port_idx];
   assign miss_rep_way_vld = miss_rep_way_vld_i[miss_port_idx];
-
+  assign miss_size              = miss_size_i[miss_port_idx];
   assign {address_tag, address_idx, address_off} = paddr;
 
   // discern addr
@@ -299,15 +284,8 @@ wt_dcache_predictor #(
   wire fine_grain;
   assign fine_grain = (addr_12 == 12'd3);
 
-  // decide what is the size of the miss that we want to fetch
-  wire [2:0] tailored_size;
-  assign tailored_size          = (fine_grain) ? 3'b011 : 3'b111;
-  wire [2:0]  miss_size;
-  //assign miss_size              = (miss_nc_i[miss_port_idx]) ? miss_size_i[miss_port_idx] : tailored_size;
-  assign miss_size              = miss_size_i[miss_port_idx];
-
   // calculate the way to replace
-  assign rep_way                = (all_ways_valid) ? rnd_way : inv_way; 
+  assign rep_way                = (all_ways_valid) ? ssrip_way : inv_way; 
   //assign repl_way		= rep_way;
   assign repl_way               = fine_grain ? rep_way : 2'b11;
   assign final_way              = miss_rep_way_vld ? miss_rep_way : repl_way;
@@ -316,14 +294,14 @@ wt_dcache_predictor #(
   assign line_upgraded_d        = (mshr_allocate)  ? miss_rep_way_vld : line_upgraded_q;
 
   // set up the mshr struct
+  assign mshr_d.signature	      = (mshr_allocate)  ? miss_signature_i[miss_port_idx] : mshr_q.signature; 
   assign mshr_d.size            = (mshr_allocate)  ? miss_size  : mshr_q.size;
-  assign mshr_d.paddr           = (mshr_allocate)  ? miss_paddr_i   [miss_port_idx] : mshr_q.paddr;
+  assign mshr_d.paddr           = (mshr_allocate)  ? paddr      : mshr_q.paddr;
   assign mshr_d.vld_bits        = (mshr_allocate)  ? miss_vld_bits_i[miss_port_idx] : mshr_q.vld_bits;
   assign mshr_d.id              = (mshr_allocate)  ? miss_id_i      [miss_port_idx] : mshr_q.id;
   assign mshr_d.nc              = (mshr_allocate)  ? miss_nc_i      [miss_port_idx] : mshr_q.nc;
   assign mshr_d.repl_way        = (mshr_allocate)  ? final_way                      : mshr_q.repl_way;
   assign mshr_d.miss_port_idx   = (mshr_allocate)  ? miss_port_idx                  : mshr_q.miss_port_idx;
-  assign mshr_d.signature       = (mshr_allocate)  ? signature                      : mshr_q.signature;
 
   // currently we only have one outstanding read TX, hence an incoming load clears the MSHR
   assign mshr_vld_d = (mshr_allocate) ? 1'b1 :
@@ -477,16 +455,12 @@ wt_dcache_predictor #(
   assign wr_cl_nc_o      = mshr_q.nc;
   assign wr_cl_vld_o     = load_ack | (| wr_cl_we_o);
 
-  assign wr_sig_we_o      = (flush_en   )   ? '1                    :           
-                            (inv_vld_all)   ? '1                    :
-                            (inv_vld    )   ? mem_rtrn_i.inv.way    :
-                            (cl_write_en)   ? repl_way	    :
-                                            '0;
+  assign wr_sig_we_o      = (cl_write_en)   ? mshr_q.repl_way :'0;
 
   assign wr_cl_we_o      = (flush_en   )  ? '1                                    :
                            (inv_vld_all)   ? '1                                    :
                            (inv_vld    )   ? dcache_way_bin2oh(mem_rtrn_i.inv.way) :
-                           (cl_write_en)   ? dcache_way_bin2oh(mshr_q.repl_way) : //final_way)    :
+                           (cl_write_en)   ? dcache_way_bin2oh(mshr_q.repl_way)    :
                                              '0;
 
   assign wr_vld_bits_o   = (flush_en   )   ? '0                                    :
@@ -528,6 +502,7 @@ wt_dcache_predictor #(
     flush_en         = 1'b0;
     amo_sel          = 1'b0;
     update_lfsr      = 1'b0;
+    miss             = 1'b0;
     mshr_allocate    = 1'b0;
     lock_reqs        = 1'b0;
     mask_reads       = mshr_vld_q;
@@ -599,6 +574,7 @@ wt_dcache_predictor #(
         mem_data_req_o            = 1'b1;
         mem_data_o.rtype          = DCACHE_LOAD_REQ;
         if (mem_data_ack_i) begin
+	  miss		= 1'b1;
           update_lfsr   = all_ways_valid;// need to evict a random way
           mshr_allocate = 1'b1;
           state_d       = IDLE;

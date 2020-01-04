@@ -44,8 +44,6 @@ module wt_dcache_srrip(
   logic [1:0] tmp3_3[DCACHE_NUM_WORDS-1:0]; 
   logic [1:0] srrip_way[DCACHE_NUM_WORDS-1:0]; 
 
-  logic conflict;
-  assign conflict = (srrip_hit_i && srrip_miss_i);
 //assign replacement
 assign srrip_way_o = srrip_way[srrip_miss_idx_i];
 //update srrip array on a hit and a new line
@@ -68,7 +66,7 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 		tmp3_2[i] = his2[i]+3;
 		tmp3_3[i] = his3[i]+3;
 		if(srrip_miss_i && (srrip_miss_idx_i == i))begin
-			if(pred_result_i == 3)begin//place new line as srrip
+			if(pred_result_i == 0)begin//place new line as srrip
 				if(his0[i] == 3)begin
 					srrip_array_d[i][0] = 3;
 					srrip_array_d[i][1] = his1[i];
@@ -132,7 +130,7 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 					end
 				end	
 			end
-			else if (pred_result_i == 0) 
+			else if (pred_result_i == 3) 
 		        begin
 				if(his0[i] == 3)begin
 					srrip_array_d[i][0] = 0;
@@ -266,7 +264,19 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 			srrip_way[i] = (his0[i]==3)?0:
 				       (his1[i]==3)?1:
 				       (his2[i]==3)?2:
-				       (his3[i]==3)?3:0;		
+				       (his3[i]==3)?3:
+				       (his0[i]==2)?0:		
+				       (his1[i]==2)?1:		
+				       (his2[i]==2)?2:		
+				       (his3[i]==2)?3:		
+				       (his0[i]==1)?0:		
+				       (his1[i]==1)?1:		
+				       (his2[i]==1)?2:		
+				       (his3[i]==1)?3:		
+				       (his0[i]==0)?0:		
+				       (his1[i]==0)?1:		
+				       (his2[i]==0)?2:		
+				       (his3[i]==0)?3:0;		
 			if(srrip_hit_way_i == 0)begin
 				srrip_array_d[i][0] = 0;
 				srrip_array_d[i][1] = his1[i];

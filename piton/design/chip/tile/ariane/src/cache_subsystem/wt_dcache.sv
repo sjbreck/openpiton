@@ -70,6 +70,18 @@ module wt_dcache #(
   logic [DCACHE_OFFSET_WIDTH-1:0] wr_off;
   logic [63:0]                    wr_data;
   logic [7:0]                     wr_data_be;
+  //predictor interface
+  logic				         pred_outcome;
+  logic	[13:0]			  pred_hit_shct;
+  logic [13:0]			  pred_miss_shct;
+  //lru interface
+  logic						    hit;
+  logic [DCACHE_CL_IDX_WIDTH-1:0]	    	    hit_idx;
+  logic	[$clog2(DCACHE_SET_ASSOC)-1:0]		  hit_way;
+/*  logic						    lru_mshr;
+  logic [DCACHE_CL_IDX_WIDTH-1:0]	    	    lru_mshr_idx;
+  logic	[$clog2(DCACHE_SET_ASSOC)-1:0]		    lru_mshr_way;
+  logic	[DCACHE_CL_IDX_WIDTH-1:0]	    	    lru_miss_idx;*/
 
   // miss unit <-> controllers/wbuffer
   logic [NumPorts-1:0]                          miss_req;
@@ -139,6 +151,7 @@ module wt_dcache #(
     .amo_req_i          ( amo_req_i          ),
     .amo_resp_o         ( amo_resp_o         ),
     // miss handling interface
+    .miss_signature_i   ( miss_signature     ),
     .miss_req_i         ( miss_req           ),
     .miss_ack_o         ( miss_ack           ),
     .miss_nc_i          ( miss_nc            ),
@@ -180,7 +193,22 @@ module wt_dcache #(
     .mem_rtrn_i         ( mem_rtrn_i         ),
     .mem_data_req_o     ( mem_data_req_o     ),
     .mem_data_ack_i     ( mem_data_ack_i     ),
-    .mem_data_o         ( mem_data_o         )
+    .mem_data_o         ( mem_data_o         ),
+
+    // input to predictor
+    .pred_outcome_i    ( pred_outcome	    ),
+    .pred_hit_shct_i   ( pred_hit_shct	    ),
+    .pred_miss_shct_i  ( pred_miss_shct	    ),
+
+
+    // input to lru
+    .hit_i	       ( hit	    ),
+    .hit_idx_i         ( hit_idx    ),
+    .hit_way_i         ( hit_way    )
+    /*.lru_mshr_i	       ( lru_mshr	    ),
+    .lru_mshr_idx_i    ( lru_mshr_idx       ),
+    .lru_mshr_way_i    ( lru_mshr_way	    ),
+    .lru_miss_idx_i    ( lru_miss_idx	    )*/
   );
 
 ///////////////////////////////////////////////////////
@@ -203,6 +231,7 @@ module wt_dcache #(
       .req_port_i      ( req_ports_i   [k] ),
       .req_port_o      ( req_ports_o   [k] ),
       // miss interface
+      .miss_signature_o( miss_signature[k] ),
       .miss_req_o      ( miss_req      [k] ),
       .miss_ack_i      ( miss_ack      [k] ),
       .miss_we_o       ( miss_we       [k] ),
@@ -254,6 +283,7 @@ module wt_dcache #(
     .req_port_i      ( req_ports_i   [2]   ),
     .req_port_o      ( req_ports_o   [2]   ),
     // miss unit interface
+    .miss_signature_o( miss_signature[2]   ),
     .miss_req_o      ( miss_req      [2]   ),
     .miss_ack_i      ( miss_ack      [2]   ),
     .miss_we_o       ( miss_we       [2]   ),
@@ -341,7 +371,21 @@ module wt_dcache #(
     .pred_miss_shct_o   ( pred_miss_shct ),
     .pred_shct_o        ( pred_shct ),
     // write buffer forwarding
-    .wbuffer_data_i    ( wbuffer_data       )
+    .wbuffer_data_i    ( wbuffer_data       ),
+
+    // output to predictor
+    .pred_outcome_o    ( pred_outcome	    ),
+    .pred_hit_shct_o   ( pred_hit_shct	    ),
+    .pred_miss_shct_o  ( pred_miss_shct	    ),
+
+    // output to lru
+    .hit_o	       ( hit	    ),
+    .hit_idx_o         ( hit_idx    ),
+    .hit_way_o         ( hit_way    )
+    /*.lru_mshr_o	       ( lru_mshr	    ),
+    .lru_mshr_idx_o    ( lru_mshr_idx       ),
+    .lru_mshr_way_o    ( lru_mshr_way	    ),
+    .lru_miss_idx_o    ( lru_miss_idx	    )*/
   );
 
 ///////////////////////////////////////////////////////

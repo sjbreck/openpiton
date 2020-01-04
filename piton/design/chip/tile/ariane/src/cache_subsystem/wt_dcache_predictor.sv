@@ -27,8 +27,7 @@ module wt_dcache_predictor #(
  logic[1:0] shct_q[16383:0];
  
 //output prediction: 0 means distant reference, 1 means immedite reference
- assign pred_result_o = (shct_q[pred_shct_i] == 3) ? 0:
-			(shct_q[pred_shct_i] != 0)? 2 : 3;
+ assign pred_result_o = shct_q[pred_shct_i];
 // assign valid_o = shct_q[signature_i].valid;
 
  logic[1:0] sat_counter_hit;
