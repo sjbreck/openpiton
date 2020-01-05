@@ -39,26 +39,20 @@ module wt_dcache_predictor #(
       sat_counter_miss = shct_q[pred_miss_shct_i];
       
       if(pred_hit_i)begin
-	      if(sat_counter_hit==3) shct_d[pred_hit_shct_i] = 3;
-	      else shct_d[pred_hit_shct_i] = sat_counter_hit + 1;
+	      if(sat_counter_hit==3) shct_d[pred_hit_shct_i] = 2'd3;
+	      else shct_d[pred_hit_shct_i] = sat_counter_hit + 2'd1;
       end
       else begin
 	      shct_d[pred_hit_shct_i] = sat_counter_hit;
       end
 
       if(pred_miss_i && !pred_outcome_i)begin
-	      if(sat_counter_miss == 0) shct_d[pred_miss_shct_i] = 0;
-	      else shct_d[pred_miss_shct_i] = sat_counter_miss - 1;
+	      if(sat_counter_miss == 0) shct_d[pred_miss_shct_i] = 2'd0;
+	      else shct_d[pred_miss_shct_i] = sat_counter_miss - 2'd1;
       end
       else begin
  	      shct_d[pred_miss_shct_i] = sat_counter_miss;
       end
-      /*if(pred_miss_i)begin
-	 shct_d[pred_shct_i] = 0;
-      end
-      else begin
-	 shct_d[pred_shct_i] = shct_q[pred_shct_i];
-      end*/
  end
 
  for (genvar i=0; i< 16384; i++) begin: gen_ffs

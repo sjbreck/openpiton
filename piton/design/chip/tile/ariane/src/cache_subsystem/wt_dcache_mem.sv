@@ -134,10 +134,10 @@ logic [13:0] signature;
 assign signature = {wr_cl_idx_i[6:0],wr_cl_tag_i[6:0]};
 //ff array of signatures
 
-logic store_sig[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+wire store_sig[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_ways_comb
-		assign store_sig[i][j] = write_signature_i && wr_cl_idx_i==i && (wr_sig_we_i==j);
+		assign store_sig[i][j] = write_signature_i && (wr_cl_idx_i==i) && (wr_sig_we_i==j);
 		assign sig_array_d[i][j] = store_sig[i][j] ? wr_cl_signature_i : sig_array_q[i][j];
 	end
 end
@@ -160,25 +160,18 @@ end
 ///////////////////////////////////////////////////////
 logic [$clog2(DCACHE_SET_ASSOC)-1:0]  rd_hit_idx;
 assign hit_o = |rd_hit_oh_o;
-assign hit_idx_o = rd_idx_i[vld_sel_d];
+assign hit_idx_o = vld_addr_q;//rd_idx_i[vld_sel_d];
 assign hit_way_o = rd_hit_idx;
 logic outcome_d [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 logic outcome_q [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 
 logic update_outcome_on_hit[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
-logic update_outcome_on_miss[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_outcome_idxs_bool
 	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_ways_bool
 
-		assign update_outcome_on_hit[i][j] = ((hit_way_o == j) && hit_idx_o==i)?
-					      	      1:0; 
-		
-		assign update_outcome_on_miss[i][j] = (write_signature_i && wr_cl_idx_i==i 
-						       && wr_sig_we_i==j)? 1:0;
-		
-		assign outcome_d[i][j] = update_outcome_on_hit[i][j] ? 
-					  1: update_outcome_on_miss[i][j]?
-					  0: outcome_q[i][j];
+		assign update_outcome_on_hit[i][j] = (hit_way_o == j) && (hit_idx_o==i); 
+		assign outcome_d[i][j] = update_outcome_on_hit[i][j] ? 1'b1 : 
+                                         store_sig[i][j] ? 1'b0 : outcome_q[i][j];
 	end
 end
 
@@ -206,6 +199,7 @@ always_comb begin: output_to_predictor
 	else begin
 		pred_hit_shct_o = '0;
 	end
+
 	if(write_signature_i)begin
 		pred_miss_shct_o = sig_array_q[wr_cl_idx_i][wr_sig_we_i];
 		pred_outcome_o = outcome_q[wr_cl_idx_i][wr_sig_we_i];

@@ -54,6 +54,9 @@ module wt_dcache #(
   logic cache_en;
 
   // miss unit <-> memory
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0]  wr_sig_we;
+  logic                           write_signature;
+  logic [13:0]                    wr_cl_signature;
   logic                           wr_cl_vld;
   logic                           wr_cl_nc;
   logic                           wr_cl_line_upgraded;
@@ -89,6 +92,7 @@ module wt_dcache #(
   logic [NumPorts-1:0]                          miss_nc;
   logic [NumPorts-1:0]                          miss_we;
   logic [NumPorts-1:0][63:0]                    miss_wdata;
+  logic [NumPorts-1:0][13:0]                    miss_signature;
   logic [NumPorts-1:0][63:0]                    miss_paddr;
   logic [NumPorts-1:0][DCACHE_SET_ASSOC-1:0]    miss_vld_bits;
   logic [NumPorts-1:0][DCACHE_SET_ASSOC-1:0]    miss_ever_hit;
@@ -174,6 +178,9 @@ module wt_dcache #(
     .wr_cl_data_o       ( wr_cl_data         ),
     .wr_cl_data_be_o    ( wr_cl_data_be      ),
     .wr_vld_bits_o      ( wr_vld_bits        ),
+    .wr_sig_we_o        ( wr_sig_we          ),
+    .write_signature_o  ( write_signature    ),
+    .wr_cl_signature_o  ( wr_cl_signature    ),
    // memory interface
     .mem_rtrn_vld_i     ( mem_rtrn_vld_i     ),
     .mem_rtrn_i         ( mem_rtrn_i         ),
@@ -342,6 +349,9 @@ module wt_dcache #(
     .wr_cl_data_i      ( wr_cl_data         ),
     .wr_cl_data_be_i   ( wr_cl_data_be      ),
     .wr_vld_bits_i     ( wr_vld_bits        ),
+    .wr_sig_we_i       ( wr_sig_we          ),
+    .write_signature_i ( write_signature    ),
+    .wr_cl_signature_i ( wr_cl_signature    ),
     // single word write port
     .wr_req_i          ( wr_req             ),
     .wr_ack_o          ( wr_ack             ),

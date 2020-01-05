@@ -78,14 +78,14 @@ module wt_dcache_missunit #(
   output dcache_req_t                                mem_data_o,
  
   // predictor interface
-  input  logic					     pred_outcome_i,
+  input  logic					         pred_outcome_i,
   input  logic [13:0]				     pred_hit_shct_i,
   input  logic [13:0]				     pred_miss_shct_i,
 
   //input to lru
-  input logic					     hit_i,
+  input logic					                         hit_i,
   input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     hit_idx_i,
-  input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]        hit_way_i
+  input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]  hit_way_i
   /*input logic					     lru_mshr_i,
   input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     lru_mshr_idx_i,
   input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]	     lru_mshr_way_i,
@@ -179,7 +179,7 @@ wt_dcache_predictor #(
    .rst_ni		(rst_ni),
    .flush_i		(flush_i),
    .pred_hit_i  	(hit_i),
-   .pred_miss_i 	(cl_write_en),
+   .pred_miss_i 	(cl_write_en && all_ways_valid),
    .pred_outcome_i	(pred_outcome_i),
    .pred_hit_shct_i     (pred_hit_shct_i),
    .pred_miss_shct_i    (pred_miss_shct_i),
@@ -281,8 +281,8 @@ wt_dcache_predictor #(
   assign miss_rep_way_vld = miss_rep_way_vld_i[miss_port_idx];
   assign miss_nc          = miss_nc_i[miss_port_idx];   
 
-  //assign miss_size        = miss_size_i[miss_port_idx];
-  assign miss_size        = miss_nc ? miss_size_i[miss_port_idx] : (|pred_result ? 3'b111 : 3'b011);
+  assign miss_size        = miss_size_i[miss_port_idx];
+  //assign miss_size        = miss_nc ? miss_size_i[miss_port_idx] : (|pred_result ? 3'b111 : 3'b011);
   assign {address_tag, address_idx, address_off} = paddr;
 
   // discern addr TODO remove
@@ -462,7 +462,7 @@ wt_dcache_predictor #(
   assign wr_cl_nc_o      = mshr_q.nc;
   assign wr_cl_vld_o     = load_ack | (| wr_cl_we_o);
 
-  assign wr_sig_we_o      = (cl_write_en)   ? mshr_q.repl_way :'0;
+  assign wr_sig_we_o      = (cl_write_en)   ? mshr_q.repl_way : '0;
 
   assign wr_cl_we_o      = (flush_en   )  ? '1                                    :
                            (inv_vld_all)   ? '1                                    :
