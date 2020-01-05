@@ -179,7 +179,7 @@ wt_dcache_predictor #(
    .rst_ni		(rst_ni),
    .flush_i		(flush_i),
    .pred_hit_i  	(hit_i),
-   .pred_miss_i 	(cl_write_en && all_ways_valid),
+   .pred_miss_i 	(cl_write_en),// && all_ways_valid),
    .pred_outcome_i	(pred_outcome_i),
    .pred_hit_shct_i     (pred_hit_shct_i),
    .pred_miss_shct_i    (pred_miss_shct_i),
@@ -281,8 +281,8 @@ wt_dcache_predictor #(
   assign miss_rep_way_vld = miss_rep_way_vld_i[miss_port_idx];
   assign miss_nc          = miss_nc_i[miss_port_idx];   
 
-  assign miss_size        = miss_size_i[miss_port_idx];
-  //assign miss_size        = miss_nc ? miss_size_i[miss_port_idx] : (|pred_result ? 3'b111 : 3'b011);
+  // Only alter size for ports 0 and 1, according with the prediction
+  assign miss_size        = miss_nc || miss_port_idx[1] ? miss_size_i[miss_port_idx] : (|pred_result ? 3'b111 : 3'b011);
   assign {address_tag, address_idx, address_off} = paddr;
 
   // discern addr TODO remove
