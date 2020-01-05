@@ -53,47 +53,47 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 		his1[i] = srrip_array_q[i][1];	
 		his2[i] = srrip_array_q[i][2];	
 		his3[i] = srrip_array_q[i][3];
-		tmp1_0[i] = his0[i]+1;
-		tmp1_1[i] = his1[i]+1;
-		tmp1_2[i] = his2[i]+1;
-		tmp1_3[i] = his3[i]+1;
-		tmp2_0[i] = his0[i]+2;
-		tmp2_1[i] = his1[i]+2;
-		tmp2_2[i] = his2[i]+2;
-		tmp2_3[i] = his3[i]+2;
-		tmp3_0[i] = his0[i]+3;
-		tmp3_1[i] = his1[i]+3;
-		tmp3_2[i] = his2[i]+3;
-		tmp3_3[i] = his3[i]+3;
+		tmp1_0[i] = his0[i]+2'd1;
+		tmp1_1[i] = his1[i]+2'd1;
+		tmp1_2[i] = his2[i]+2'd1;
+		tmp1_3[i] = his3[i]+2'd1;
+		tmp2_0[i] = his0[i]+2'd2;
+		tmp2_1[i] = his1[i]+2'd2;
+		tmp2_2[i] = his2[i]+2'd2;
+		tmp2_3[i] = his3[i]+2'd2;
+		tmp3_0[i] = his0[i]+2'd3;
+		tmp3_1[i] = his1[i]+2'd3;
+		tmp3_2[i] = his2[i]+2'd3;
+		tmp3_3[i] = his3[i]+2'd3;
 		if(srrip_miss_i && (srrip_miss_idx_i == i))begin
 			if(pred_result_i == 0)begin//place new line as srrip
 				if(his0[i] == 3)begin
-					srrip_array_d[i][0] = 3;
+					srrip_array_d[i][0] = 2'd3;
 					srrip_array_d[i][1] = his1[i];
 					srrip_array_d[i][2] = his2[i];
 					srrip_array_d[i][3] = his3[i];
-					srrip_way[i] = 0;	
+					srrip_way[i] = 2'd0;	
 				end
 				else if(his1[i] == 3)begin
 					srrip_array_d[i][0] = his0[i];
-					srrip_array_d[i][1] = 3;
+					srrip_array_d[i][1] = 2'd3;
 					srrip_array_d[i][2] = his2[i];
 					srrip_array_d[i][3] = his3[i];	
-					srrip_way[i] = 1;
+					srrip_way[i] = 2'd1;
 				end
 				else if(his2[i] == 3)begin
 					srrip_array_d[i][0] = his0[i];
 					srrip_array_d[i][1] = his1[i];
-					srrip_array_d[i][2] = 3;
+					srrip_array_d[i][2] = 2'd3;
 					srrip_array_d[i][3] = his3[i];	
-					srrip_way[i] = 2;
+					srrip_way[i] = 2'd2;
 				end
 				else if(his3[i] == 3)begin
 					srrip_array_d[i][0] = his0[i];
 					srrip_array_d[i][1] = his1[i];
 					srrip_array_d[i][2] = his2[i];
-					srrip_array_d[i][3] = 3;	
-					srrip_way[i] = 3;
+					srrip_array_d[i][3] = 2'd3;	
+					srrip_way[i] = 2'd3;
 				end
 				else begin
 					if(tmp1_0[i]==3 || tmp1_1[i]==3 || tmp1_2[i]==3 || tmp1_3[i]==3)
@@ -103,9 +103,9 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 						srrip_array_d[i][2] = tmp1_2[i];
 						srrip_array_d[i][3] = tmp1_3[i];
 						srrip_way[i] = (tmp1_0[i]==3)?0:
-							      (tmp1_1[i]==3)?1:
-							      (tmp1_2[i]==3)?2:
-							      (tmp1_3[i]==3)?3:0;		
+							      (tmp1_1[i]==3)? 2'd1:
+							      (tmp1_2[i]==3)? 2'd2:
+							      (tmp1_3[i]==3)? 2'd3: 2'd0;		
 					end
 					else if(tmp2_0[i]==3 || tmp2_1[i]==3 || tmp2_2[i]==3 || tmp2_3[i]==3)
 					begin
@@ -114,9 +114,9 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 						srrip_array_d[i][2] = tmp2_2[i];
 						srrip_array_d[i][3] = tmp2_3[i];		
 						srrip_way[i] = (tmp2_0[i]==3)?0:
-							      (tmp2_1[i]==3)?1:
-							      (tmp2_2[i]==3)?2:
-							      (tmp2_3[i]==3)?3:0;		
+							      (tmp2_1[i]==3)? 2'd1:
+							      (tmp2_2[i]==3)? 2'd2:
+							      (tmp2_3[i]==3)? 2'd3: 2'd0;		
 					end
 					else begin
 						srrip_array_d[i][0] = tmp3_0[i];
@@ -124,9 +124,9 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 						srrip_array_d[i][2] = tmp3_2[i];
 						srrip_array_d[i][3] = tmp3_3[i];		
 						srrip_way[i] = (tmp3_0[i]==3)?0:
-							      (tmp3_1[i]==3)?1:
-							      (tmp3_2[i]==3)?2:
-							      (tmp3_3[i]==3)?3:0;		
+							      (tmp3_1[i]==3)? 2'd1:
+							      (tmp3_2[i]==3)? 2'd2:
+							      (tmp3_3[i]==3)? 2'd3: 2'd0;		
 					end
 				end	
 			end

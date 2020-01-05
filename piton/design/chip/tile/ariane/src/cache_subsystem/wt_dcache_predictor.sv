@@ -64,7 +64,7 @@ module wt_dcache_predictor #(
  for (genvar i=0; i< 16384; i++) begin: gen_ffs
 	always_ff @ (posedge clk_i or negedge rst_ni)begin:ff_shct
 		if(!rst_ni || flush_i)begin
-			shct_q[i] <= 3;
+			shct_q[i] <= 2'b11;
 		end
 		else begin
 			shct_q[i] <= shct_d[i];

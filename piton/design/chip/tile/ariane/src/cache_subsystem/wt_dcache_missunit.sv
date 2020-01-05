@@ -35,7 +35,7 @@ module wt_dcache_missunit #(
   input  amo_req_t                                   amo_req_i,
   output amo_resp_t                                  amo_resp_o,
   // miss handling interface (ld, ptw, wbuffer)
-  input  logic [NumPorts-1:0][13:0]		     miss_signature_i,
+  input  logic [NumPorts-1:0][13:0]		               miss_signature_i,
   input  logic [NumPorts-1:0]                        miss_req_i,
   output logic [NumPorts-1:0]                        miss_ack_o,
   input  logic [NumPorts-1:0]                        miss_nc_i,
@@ -166,9 +166,10 @@ module wt_dcache_missunit #(
 ///////////////////////////////////////////////////////
 // line prediction
 ///////////////////////////////////////////////////////
-logic[1:0]  pred_result;
+ logic[1:0]  pred_result;
  logic[13:0] signature;
- assign signature = {miss_paddr_i[miss_port_idx][DCACHE_OFFSET_WIDTH+6:DCACHE_OFFSET_WIDTH], miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH+6:DCACHE_INDEX_WIDTH]};
+ assign signature = miss_signature_i[miss_port_idx];
+//assign signature = {miss_paddr_i[miss_port_idx][DCACHE_OFFSET_WIDTH+6:DCACHE_OFFSET_WIDTH], miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH+6:DCACHE_INDEX_WIDTH]};
 
 wt_dcache_predictor #(
    .Axi64BitCompliant(1'b0),
@@ -266,40 +267,46 @@ wt_dcache_predictor #(
   wire [63:0] paddr;
   wire [DCACHE_SET_ASSOC-1:0] hit_way;
   wire [DCACHE_SET_ASSOC-1:0] valid_ways;
-  wire [$clog2(DCACHE_SET_ASSOC)-1:0] miss_rep_way;
+  wire [$clog2(DCACHE_SET_ASSOC)-1:0] miss_rep_way, final_way;
   wire [2:0]  miss_size;
   wire miss_rep_way_vld;
+  wire miss_nc;
+  reg line_upgraded_q;
+  wire line_upgraded_d;
   
-  assign paddr = miss_paddr_i[miss_port_idx];
-  assign valid_ways = miss_vld_bits_i[miss_port_idx];
-  assign hit_way = miss_ever_hit_i[miss_port_idx];
-  assign miss_rep_way = miss_rep_way_i[miss_port_idx];
+  assign paddr            = miss_paddr_i[miss_port_idx];
+  assign valid_ways       = miss_vld_bits_i[miss_port_idx];
+  assign hit_way          = miss_ever_hit_i[miss_port_idx];
+  assign miss_rep_way     = miss_rep_way_i[miss_port_idx];
   assign miss_rep_way_vld = miss_rep_way_vld_i[miss_port_idx];
-  assign miss_size              = miss_size_i[miss_port_idx];
+  assign miss_nc          = miss_nc_i[miss_port_idx];   
+
+  //assign miss_size        = miss_size_i[miss_port_idx];
+  assign miss_size        = miss_nc ? miss_size_i[miss_port_idx] : (|pred_result ? 3'b111 : 3'b011);
   assign {address_tag, address_idx, address_off} = paddr;
 
-  // discern addr
+  // discern addr TODO remove
   wire [11:0] addr_12;
   assign addr_12 = paddr[23:12];  
   wire fine_grain;
   assign fine_grain = (addr_12 == 12'd3);
 
   // calculate the way to replace
-  assign rep_way                = (all_ways_valid) ? ssrip_way : inv_way; 
-  //assign repl_way		= rep_way;
-  assign repl_way               = fine_grain ? rep_way : 2'b11;
+  assign rep_way                = (all_ways_valid) ? srrip_way : inv_way; 
+  assign repl_way		= rep_way;
+  //assign repl_way               = fine_grain ? rep_way : 2'b11;
   assign final_way              = miss_rep_way_vld ? miss_rep_way : repl_way;
 
   // if the response if to upgrade a line that only had one bank, we keep that one valid
   assign line_upgraded_d        = (mshr_allocate)  ? miss_rep_way_vld : line_upgraded_q;
 
   // set up the mshr struct
-  assign mshr_d.signature	      = (mshr_allocate)  ? miss_signature_i[miss_port_idx] : mshr_q.signature; 
+  assign mshr_d.signature	      = (mshr_allocate)  ? signature  : mshr_q.signature; 
   assign mshr_d.size            = (mshr_allocate)  ? miss_size  : mshr_q.size;
   assign mshr_d.paddr           = (mshr_allocate)  ? paddr      : mshr_q.paddr;
   assign mshr_d.vld_bits        = (mshr_allocate)  ? miss_vld_bits_i[miss_port_idx] : mshr_q.vld_bits;
   assign mshr_d.id              = (mshr_allocate)  ? miss_id_i      [miss_port_idx] : mshr_q.id;
-  assign mshr_d.nc              = (mshr_allocate)  ? miss_nc_i      [miss_port_idx] : mshr_q.nc;
+  assign mshr_d.nc              = (mshr_allocate)  ? miss_nc    : mshr_q.nc;
   assign mshr_d.repl_way        = (mshr_allocate)  ? final_way                      : mshr_q.repl_way;
   assign mshr_d.miss_port_idx   = (mshr_allocate)  ? miss_port_idx                  : mshr_q.miss_port_idx;
 
@@ -308,7 +315,7 @@ wt_dcache_predictor #(
                       (load_ack)      ? 1'b0 :
                                         mshr_vld_q;
 
-  assign miss_o     = (mshr_allocate) ? ~miss_nc_i[miss_port_idx] : 1'b0;
+  assign miss_o     = (mshr_allocate) ? !miss_nc : 1'b0;
 
 
   for(genvar k=0; k<NumPorts; k++) begin : gen_rdrd_collision
@@ -353,7 +360,7 @@ wt_dcache_predictor #(
 
   // outgoing memory requests (AMOs are always uncached)
   assign mem_data_o.tid    = (amo_sel) ? AmoTxId             : miss_id_i[miss_port_idx];
-  assign mem_data_o.nc     = (amo_sel) ? 1'b1                : miss_nc_i[miss_port_idx];
+  assign mem_data_o.nc     = (amo_sel) ? 1'b1                : miss_nc;
   assign mem_data_o.way    = (amo_sel) ? '0                  : final_way;
   assign mem_data_o.data   = (amo_sel) ? amo_data            : miss_wdata_i[miss_port_idx];
   assign mem_data_o.size   = (amo_sel) ? amo_req_i.size      : miss_size;

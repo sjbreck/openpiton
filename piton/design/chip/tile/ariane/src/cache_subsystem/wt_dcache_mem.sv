@@ -137,8 +137,7 @@ assign signature = {wr_cl_idx_i[6:0],wr_cl_tag_i[6:0]};
 logic store_sig[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_ways_comb
-		assign store_sig[i][j] = (write_signature_i && wr_cl_idx_i==i && wr_sig_we_i==j)?
-					 1:0; 
+		assign store_sig[i][j] = write_signature_i && wr_cl_idx_i==i && (wr_sig_we_i==j);
 		assign sig_array_d[i][j] = store_sig[i][j] ? wr_cl_signature_i : sig_array_q[i][j];
 	end
 end
