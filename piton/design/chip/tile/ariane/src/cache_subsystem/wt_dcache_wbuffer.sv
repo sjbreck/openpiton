@@ -77,7 +77,7 @@ module wt_dcache_wbuffer #(
   input  logic                               miss_rtrn_vld_i,
   input  logic [CACHE_ID_WIDTH-1:0]          miss_rtrn_id_i,  // transaction ID to clear
   // cache read interface
-  output logic [13:0]			     signature_o,
+  //output logic [13:0]			     signature_o,
   output logic [DCACHE_TAG_WIDTH-1:0]        rd_tag_o,        // tag in - comes one cycle later
   output logic [DCACHE_CL_IDX_WIDTH-1:0]     rd_idx_o,
   output logic [DCACHE_OFFSET_WIDTH-1:0]     rd_off_o,
@@ -271,7 +271,7 @@ module wt_dcache_wbuffer #(
 ///////////////////////////////////////////////////////
 
   assign rd_tag_d   = rd_paddr>>DCACHE_INDEX_WIDTH;
-  assign signature_o = wbuffer_check_mux.signature;
+  //assign signature_o = wbuffer_check_mux.signature;
   // trigger TAG readout in cache
   assign rd_tag_only_o = 1'b1;
   assign rd_paddr   = wbuffer_check_mux.wtag<<3;

@@ -78,14 +78,14 @@ module wt_dcache_missunit #(
   output dcache_req_t                                mem_data_o,
  
   // predictor interface
-  input  logic					         pred_outcome_i,
-  input  logic [13:0]				     pred_hit_shct_i,
-  input  logic [13:0]				     pred_miss_shct_i,
+  input  logic [1:0]				     pred_outcome_i,
+  input  logic [13:0]      			     pred_hit_shct_i,
+  input  logic [1:0][13:0]			     pred_miss_shct_i,
 
   //input to lru
-  input logic					                         hit_i,
+  input logic					     hit_i,
   input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     hit_idx_i,
-  input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]  hit_way_i
+  input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]        hit_way_i
   /*input logic					     lru_mshr_i,
   input logic  [DCACHE_CL_IDX_WIDTH-1:0]	     lru_mshr_idx_i,
   input logic  [$clog2(DCACHE_SET_ASSOC)-1:0]	     lru_mshr_way_i,
@@ -99,6 +99,7 @@ module wt_dcache_missunit #(
   // MSHR for reads
   typedef struct packed {
     logic [13:0]			 signature;
+    logic         			 all_ways_valid;
     logic [63:0]                         paddr   ;
     logic [2:0]                          size    ;
     logic [DCACHE_SET_ASSOC-1:0]         vld_bits;
@@ -168,9 +169,16 @@ module wt_dcache_missunit #(
 ///////////////////////////////////////////////////////
  logic[1:0]  pred_result;
  logic[13:0] signature;
+ logic pred_miss;
+ assign pred_miss = wr_cl_vld_o;//flush_en || inv_vld || inv_vld_all || (cl_write_en && mshr_q.all_ways_valid);
  assign signature = miss_signature_i[miss_port_idx];
 //assign signature = {miss_paddr_i[miss_port_idx][DCACHE_OFFSET_WIDTH+6:DCACHE_OFFSET_WIDTH], miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH+6:DCACHE_INDEX_WIDTH]};
-
+  logic [3:0] pred_miss_way;
+  assign pred_miss_way   = (flush_en   )  ? '1                                    :
+                           (inv_vld_all)   ? '1                                    :
+                           (inv_vld    )   ? dcache_way_bin2oh(mem_rtrn_i.inv.way) :
+                           (cl_write_en)   ? dcache_way_bin2oh(mshr_q.repl_way)    :
+                                             '0;
 wt_dcache_predictor #(
    .Axi64BitCompliant(1'b0),
    .NumPorts(3)
@@ -179,10 +187,11 @@ wt_dcache_predictor #(
    .rst_ni		(rst_ni),
    .flush_i		(flush_i),
    .pred_hit_i  	(hit_i),
-   .pred_miss_i 	(cl_write_en),// && all_ways_valid),
+   .pred_miss_i 	(pred_miss),
    .pred_outcome_i	(pred_outcome_i),
    .pred_hit_shct_i     (pred_hit_shct_i),
    .pred_miss_shct_i    (pred_miss_shct_i),
+   .pred_miss_way_i     (pred_miss_way),
    .pred_shct_i		(signature),
    .pred_result_o	(pred_result)
 ); 
@@ -282,7 +291,7 @@ wt_dcache_predictor #(
   assign miss_nc          = miss_nc_i[miss_port_idx];   
 
   // Only alter size for ports 0 and 1, according with the prediction
-  assign miss_size        = miss_nc || miss_port_idx[1] ? miss_size_i[miss_port_idx] : (|pred_result ? 3'b111 : 3'b011);
+  assign miss_size        = miss_nc || miss_port_idx[1] ? miss_size_i[miss_port_idx] : (|pred_result ? 3'b111 : 3'b111);
   assign {address_tag, address_idx, address_off} = paddr;
 
   // discern addr TODO remove
@@ -302,6 +311,7 @@ wt_dcache_predictor #(
 
   // set up the mshr struct
   assign mshr_d.signature	      = (mshr_allocate)  ? signature  : mshr_q.signature; 
+  assign mshr_d.all_ways_valid	      = (mshr_allocate)  ? all_ways_valid  : mshr_q.all_ways_valid; 
   assign mshr_d.size            = (mshr_allocate)  ? miss_size  : mshr_q.size;
   assign mshr_d.paddr           = (mshr_allocate)  ? paddr      : mshr_q.paddr;
   assign mshr_d.vld_bits        = (mshr_allocate)  ? miss_vld_bits_i[miss_port_idx] : mshr_q.vld_bits;

@@ -44,7 +44,7 @@ module wt_dcache_ctrl #(
   // used to detect readout mux collisions
   input  logic                            wr_cl_vld_i,
   // cache memory interface
-  output logic [13:0]			  signature_o,
+  //output logic [13:0]			  signature_o,
   output logic [DCACHE_TAG_WIDTH-1:0]     rd_tag_o,        // tag in - comes one cycle later
   output logic [DCACHE_CL_IDX_WIDTH-1:0]  rd_idx_o,
   output logic [DCACHE_OFFSET_WIDTH-1:0]  rd_off_o,
@@ -88,7 +88,7 @@ module wt_dcache_ctrl #(
   assign address_idx_d = (req_port_o.data_gnt) ? req_port_i.address_index[DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH] : address_idx_q;
   assign address_off_d = (req_port_o.data_gnt) ? req_port_i.address_index[DCACHE_OFFSET_WIDTH-1:0]                  : address_off_q;
   assign data_size_d   = (req_port_o.data_gnt) ? req_port_i.data_size                                               : data_size_q;
-  assign signature_o   = signature_d; //signature sent out without checking hit/miss	
+  //assign signature_o   = signature_d; //signature sent out without checking hit/miss	
   assign rd_tag_o      = address_tag_d;
   assign rd_idx_o      = address_idx_d;
   assign rd_off_o      = address_off_d;

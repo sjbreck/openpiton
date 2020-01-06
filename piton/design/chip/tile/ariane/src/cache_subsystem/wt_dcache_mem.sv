@@ -77,9 +77,9 @@ module wt_dcache_mem #(
   input wbuffer_t             [DCACHE_WBUF_DEPTH-1:0]       wbuffer_data_i,
 
   //output to predictor
-  output logic						    pred_outcome_o,
+  output logic		      [1:0]		            pred_outcome_o,
   output logic		      [13:0]			    pred_hit_shct_o, //signature that hitted
-  output logic		      [13:0]			    pred_miss_shct_o, //signature that missed
+  output logic		      [1:0][13:0]		    pred_miss_shct_o, //signature that missed
 
   //output to policies
   output logic						    hit_o,
@@ -119,7 +119,7 @@ module wt_dcache_mem #(
   logic [63:0]                                                  wbuffer_cmp_addr;
 
   logic                                                         cmp_en_d, cmp_en_q;
-  logic                       [DCACHE_CL_IDX_WIDTH-1:0]         vld_addr_q;
+  logic                       [DCACHE_CL_IDX_WIDTH-1:0]         vld_addr_q, rd_idx_q;
   logic                                                         rd_acked;
   logic [NumPorts-1:0]                                          bank_collision, rd_req_masked, rd_req_prio;
 
@@ -160,18 +160,21 @@ end
 ///////////////////////////////////////////////////////
 logic [$clog2(DCACHE_SET_ASSOC)-1:0]  rd_hit_idx;
 assign hit_o = |rd_hit_oh_o;
-assign hit_idx_o = vld_addr_q;//rd_idx_i[vld_sel_d];
+assign hit_idx_o = vld_addr_q;
 assign hit_way_o = rd_hit_idx;
 logic outcome_d [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 logic outcome_q [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 
 logic update_outcome_on_hit[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
+logic update_outcome_on_miss[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_outcome_idxs_bool
 	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_ways_bool
 
 		assign update_outcome_on_hit[i][j] = (hit_way_o == j) && (hit_idx_o==i); 
+		assign update_outcome_on_miss[i][j] = (wr_cl_vld_i && (wr_cl_idx_i==i) && 
+							(wr_cl_we_i[i]))? 1 : 0;
 		assign outcome_d[i][j] = update_outcome_on_hit[i][j] ? 1'b1 : 
-                                         store_sig[i][j] ? 1'b0 : outcome_q[i][j];
+                                         update_outcome_on_miss[i][j] ? 1'b0 : outcome_q[i][j];
 	end
 end
 
@@ -201,8 +204,14 @@ always_comb begin: output_to_predictor
 	end
 
 	if(write_signature_i)begin
-		pred_miss_shct_o = sig_array_q[wr_cl_idx_i][wr_sig_we_i];
-		pred_outcome_o = outcome_q[wr_cl_idx_i][wr_sig_we_i];
+		pred_miss_shct_o[0] = sig_array_q[wr_cl_idx_i][0];
+		pred_miss_shct_o[1] = sig_array_q[wr_cl_idx_i][1];
+		pred_miss_shct_o[2] = sig_array_q[wr_cl_idx_i][2];
+		pred_miss_shct_o[3] = sig_array_q[wr_cl_idx_i][3];
+		pred_outcome_o[0] = outcome_q[wr_cl_idx_i][0];
+		pred_outcome_o[1] = outcome_q[wr_cl_idx_i][1];
+		pred_outcome_o[2] = outcome_q[wr_cl_idx_i][2];
+		pred_outcome_o[3] = outcome_q[wr_cl_idx_i][3];
 	end
 	else begin
 		pred_miss_shct_o = '0;
@@ -447,12 +456,14 @@ end
       vld_sel_q  <= '0;
       cmp_en_q   <= '0;
       vld_addr_q <= '0;
+      //rd_idx_q   <= '0;
     end else begin
       bank_idx_q <= bank_idx_d;
       bank_off_q <= bank_off_d;
       vld_sel_q  <= vld_sel_d ;
       cmp_en_q   <= cmp_en_d;
       vld_addr_q <= vld_addr;
+      //rd_idx_q   <= rd_idx_i[vld_sel_d];
     end
   end
 
