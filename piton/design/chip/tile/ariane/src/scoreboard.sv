@@ -76,7 +76,8 @@ module scoreboard #(
   logic [BITS_ENTRIES-1:0] issue_pointer_n,  issue_pointer_q;
   logic [NR_COMMIT_PORTS-1:0][BITS_ENTRIES-1:0] commit_pointer_n, commit_pointer_q;
   logic [$clog2(NR_COMMIT_PORTS):0] num_commit;
-
+  logic [1000:0] inst_cnt;
+  logic count_up[1:0]; //2 count ports
   // the issue queue is full don't issue any new instructions
   // works since aligned to power of 2
   assign issue_full = &issue_cnt_q;
@@ -145,8 +146,12 @@ module scoreboard #(
     for (logic [BITS_ENTRIES-1:0] i = 0; i < NR_COMMIT_PORTS; i++) begin
       if (commit_ack_i[i]) begin
         // this instruction is no longer in issue e.g.: it is considered finished
+        count_up[i] = 1'b1;
         mem_n[commit_pointer_q[i]].issued     = 1'b0;
         mem_n[commit_pointer_q[i]].sbe.valid  = 1'b0;
+      end
+      else begin
+	count_up[i] = 1'b0;
       end
     end
 
@@ -163,6 +168,14 @@ module scoreboard #(
     end
   end
 
+    always_ff @ (posedge clk_i or negedge rst_ni) begin: inst_counter
+	if(!rst_ni)begin
+		inst_cnt <= '0;
+	end
+	else begin
+		inst_cnt <= inst_cnt + count_up[0] + count_up[1];
+	end
+    end 
   // FIFO counter updates
   popcount #(
     .INPUT_WIDTH(NR_COMMIT_PORTS)
