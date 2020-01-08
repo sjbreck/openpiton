@@ -43,7 +43,7 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 		his[i] = plru_array_q[i];
 
 		if(plru_miss_i && (plru_miss_idx_i == i))begin
-			if(pred_result_i == 3)begin//place new line as lru
+			if(pred_result_i == 0)begin//place new line as lru
 				plru_array_d[i] <= his[i];
 			end
 			else begin
