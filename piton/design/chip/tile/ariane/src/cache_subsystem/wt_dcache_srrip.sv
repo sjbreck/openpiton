@@ -65,7 +65,7 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 		tmp3_2[i] = his2[i]+3;
 		tmp3_3[i] = his3[i]+3;
 		if(srrip_miss_i && (srrip_miss_idx_i == i))begin
-			if(pred_result_i == 0)begin//place new line as srrip
+			/*if(pred_result_i == 0)begin//place new line as srrip
 				if(his0[i] == 3)begin
 					srrip_array_d[i][0] = 3;
 					srrip_array_d[i][1] = his1[i];
@@ -194,7 +194,7 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 					end
 				end	
 		        end
-			else begin
+			else begin*/
 				if(his0[i] == 3)begin
 					srrip_array_d[i][0] = 2;
 					srrip_array_d[i][1] = his1[i];
@@ -257,7 +257,7 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 							       (tmp3_3[i]==3)?3:0;		
 					end
 				end	
-			end
+			//end
 		end
 		else if(i==srrip_hit_idx_i && srrip_hit_i)begin
 			srrip_way[i] = (his0[i]==3)?0:
