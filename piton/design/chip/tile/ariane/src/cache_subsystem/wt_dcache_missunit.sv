@@ -78,7 +78,7 @@ module wt_dcache_missunit #(
   output dcache_req_t                                mem_data_o,
  
   // predictor interface
-  input  logic [1:0]				     pred_outcome_i,
+  input  logic [3:0]				     pred_outcome_i,
   input  logic [13:0]      			     pred_hit_shct_i,
   input  logic [1:0][13:0]			     pred_miss_shct_i,
 
@@ -110,7 +110,7 @@ module wt_dcache_missunit #(
   } mshr_t;
 
   mshr_t mshr_d, mshr_q;
-  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, rnd_way, lru_way, srrip_way, plru_way;
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, inv_way, rnd_way, lru_way, srrip_way, plru_way;
   logic mshr_vld_d, mshr_vld_q, mshr_vld_q1;
   logic mshr_allocate;
   logic update_lfsr, all_ways_valid, miss;
@@ -290,20 +290,16 @@ wt_dcache_predictor #(
   assign miss_rep_way_vld = miss_rep_way_vld_i[miss_port_idx];
   assign miss_nc          = miss_nc_i[miss_port_idx];   
 
-  // Only alter size for ports 0 and 1, according with the prediction
-  assign miss_size        = miss_nc || miss_port_idx[1] ? miss_size_i[miss_port_idx] : (|pred_result ? 3'b111 : 3'b111);
+  wire full_line_fetch;
+  assign full_line_fetch = |pred_result;
+  
+  // Only alter size for ports 0 and 1, according with the prediction, port 2 is the write buffer
+  assign miss_size        = (miss_nc || miss_port_idx[1]) ? miss_size_i[miss_port_idx] : 
+                                       (full_line_fetch ? 3'b111 : 3'b011);
   assign {address_tag, address_idx, address_off} = paddr;
 
-  // discern addr TODO remove
-  wire [11:0] addr_12;
-  assign addr_12 = paddr[23:12];  
-  wire fine_grain;
-  assign fine_grain = (addr_12 == 12'd3);
-
   // calculate the way to replace
-  assign rep_way                = (all_ways_valid) ? srrip_way : inv_way; 
-  assign repl_way		= rep_way;
-  //assign repl_way               = fine_grain ? rep_way : 2'b11;
+  assign repl_way                = (all_ways_valid) ? srrip_way : inv_way; 
   assign final_way              = miss_rep_way_vld ? miss_rep_way : repl_way;
 
   // if the response if to upgrade a line that only had one bank, we keep that one valid
