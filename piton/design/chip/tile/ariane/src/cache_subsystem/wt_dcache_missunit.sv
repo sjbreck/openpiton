@@ -80,7 +80,7 @@ module wt_dcache_missunit #(
   // predictor interface
   input  logic [3:0]				     pred_outcome_i,
   input  logic [13:0]      			     pred_hit_shct_i,
-  input  logic [1:0][13:0]			     pred_miss_shct_i,
+  input  logic [3:0][13:0]			     pred_miss_shct_i,
 
   //input to lru
   input logic					     hit_i,

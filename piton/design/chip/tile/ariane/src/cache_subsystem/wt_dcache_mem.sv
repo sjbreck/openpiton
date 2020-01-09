@@ -79,7 +79,7 @@ module wt_dcache_mem #(
   //output to predictor
   output logic		      [3:0]		            pred_outcome_o,
   output logic		      [13:0]			    pred_hit_shct_o, //signature that hitted
-  output logic		      [1:0][13:0]		    pred_miss_shct_o, //signature that missed
+  output logic		      [3:0][13:0]		    pred_miss_shct_o, //signature that missed
 
   //output to policies
   output logic						    hit_o,
