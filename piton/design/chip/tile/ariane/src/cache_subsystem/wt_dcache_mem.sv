@@ -375,9 +375,7 @@ end
 
   if (Axi64BitCompliant) begin : gen_axi_off
       assign wr_cl_off     = (wr_cl_nc_i) ? '0 : wr_cl_bank_sel;
-      //assign wr_cl_off     = (wr_cl_nc_i) ? '0 : wr_cl_off_i[DCACHE_OFFSET_WIDTH-1:3];
   end else begin  : gen_piton_off
-      //assign wr_cl_off     = wr_cl_off_i[DCACHE_OFFSET_WIDTH-1:3];
       assign wr_cl_off     = wr_cl_bank_sel;
   end
 
@@ -418,12 +416,10 @@ end
     assign tag_rdata[i]     = vld_tag_rdata[i][DCACHE_TAG_WIDTH-1:0];
     assign rd_vld_bits[i*DCACHE_NUM_BANKS+:DCACHE_NUM_BANKS] = vld_tag_rdata[i][DCACHE_TAG_WIDTH+DCACHE_NUM_BANKS-1:DCACHE_TAG_WIDTH];
     assign rd_ever_hit_o[i] = hit_q[vld_addr_q][i];
-    //assign rd_vld_bits_o[i] = vld_tag_rdata[i][DCACHE_TAG_WIDTH];
     // Tag RAM
     sram #(
       // tag + valid bit
       .DATA_WIDTH ( ariane_pkg::DCACHE_TAG_WIDTH + DCACHE_NUM_BANKS ),
-      //.DATA_WIDTH ( ariane_pkg::DCACHE_TAG_WIDTH + 1 ),
       .NUM_WORDS  ( wt_cache_pkg::DCACHE_NUM_WORDS   )
     ) i_tag_sram (
       .clk_i     ( clk_i               ),
@@ -456,14 +452,12 @@ end
       vld_sel_q  <= '0;
       cmp_en_q   <= '0;
       vld_addr_q <= '0;
-      //rd_idx_q   <= '0;
     end else begin
       bank_idx_q <= bank_idx_d;
       bank_off_q <= bank_off_d;
       vld_sel_q  <= vld_sel_d ;
       cmp_en_q   <= cmp_en_d;
       vld_addr_q <= vld_addr;
-      //rd_idx_q   <= rd_idx_i[vld_sel_d];
     end
   end
 
@@ -488,7 +482,6 @@ end
 
   // this is only used for verification!
   logic [1:0]                                   vld_mirror[wt_cache_pkg::DCACHE_NUM_WORDS-1:0][ariane_pkg::DCACHE_SET_ASSOC-1:0];
-  //logic                                    vld_mirror[wt_cache_pkg::DCACHE_NUM_WORDS-1:0][ariane_pkg::DCACHE_SET_ASSOC-1:0];
   logic [ariane_pkg::DCACHE_TAG_WIDTH-1:0] tag_mirror[wt_cache_pkg::DCACHE_NUM_WORDS-1:0][ariane_pkg::DCACHE_SET_ASSOC-1:0];
   logic [ariane_pkg::DCACHE_SET_ASSOC-1:0] tag_write_duplicate_test;
   logic [31:0] bw_byte_count;
@@ -511,7 +504,6 @@ end
         if(vld_req[i] & vld_we) begin
           vld_mirror[vld_addr][i] <= ({wr_cl_data_be_i[8], wr_cl_data_be_i[0]} | {2{wr_cl_line_upgraded_i}})
                                        & {2{vld_wdata[i]}};
-          //vld_mirror[vld_addr][i] <= vld_wdata[i];
           tag_mirror[vld_addr][i] <= wr_cl_tag_i;
         end
       end
@@ -520,7 +512,6 @@ end
 
   for (genvar i = 0; i < DCACHE_SET_ASSOC; i++) begin : gen_tag_dubl_test
       assign tag_write_duplicate_test[i] = (tag_mirror[vld_addr][i] == wr_cl_tag_i) & vld_mirror[vld_addr][i][wr_cl_bank_sel] & (|vld_wdata);
-      //assign tag_write_duplicate_test[i] = (tag_mirror[vld_addr][i] == wr_cl_tag_i) & vld_mirror[vld_addr][i] & (|vld_wdata);
   end
 
   tag_write_duplicate: assert property (
