@@ -14,7 +14,7 @@ module wt_dcache_predictor #(
    //input ports
    input logic			pred_hit_i,
    input logic   		pred_miss_i,  
-   input logic[1:0]	        pred_outcome_i, 
+   input logic[3:0]	        pred_outcome_i, 
    input logic[13:0]		pred_hit_shct_i, //signature of hitted line
    input logic[1:0][13:0]	pred_miss_shct_i, // evicted sig
    input logic[3:0]      	pred_miss_way_i, // evicted sig
