@@ -43,10 +43,10 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 		his[i] = plru_array_q[i];
 
 		if(plru_miss_i && (plru_miss_idx_i == i))begin
-			if(pred_result_i == 0)begin//place new line as lru
+			/*if(pred_result_i == 0)begin//place new line as lru
 				plru_array_d[i] <= his[i];
 			end
-			else begin
+			else begin*/
 				if (his[i] == 3'b000) plru_array_d[i] = {2'b11,his[i][0]};
 				else if (his[i] == 3'b001) plru_array_d[i] = {2'b11,his[i][0]};
 				else if (his[i] == 3'b010) plru_array_d[i] = {2'b10,his[i][0]};
@@ -55,7 +55,7 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 				else if (his[i] == 3'b101) plru_array_d[i] = {1'b0,his[i][1],1'b0};
 				else if (his[i] == 3'b110) plru_array_d[i] = {1'b0,his[i][1],1'b1};
 				else if (his[i] == 3'b111) plru_array_d[i] = {1'b0,his[i][1],1'b0};
-			end
+			//end
 		end
 		else if(i==plru_hit_idx_i && plru_hit_i)begin
 			if(plru_hit_way_i == 0)begin
