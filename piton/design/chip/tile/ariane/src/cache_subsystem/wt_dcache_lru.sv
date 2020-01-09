@@ -41,12 +41,12 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 		his3[i] = lru_array_q[i][3];
 
 		if(lru_miss_i && (lru_miss_idx_i == i))begin
-			if(pred_result_i == 3)begin//place new line as lru
+			//if(pred_result_i == 3)begin//place new line as lru
 				lru_array_d[i][0] = his1[i];
 				lru_array_d[i][1] = his2[i];
 				lru_array_d[i][2] = his3[i];
 				lru_array_d[i][3] = his0[i];	
-			end
+			/*end
 			else if(pred_result_i == 0)begin
 				lru_array_d[i][0] = his0[i];
 				lru_array_d[i][1] = his1[i];
@@ -58,7 +58,7 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 				lru_array_d[i][1] = his2[i];
 				lru_array_d[i][2] = his0[i];
 				lru_array_d[i][3] = his3[i];	
-			end
+			end*/
 		end
 		else if(i==lru_hit_idx_i && lru_hit_i)begin
 			if(lru_hit_way_i == his0[i])begin
