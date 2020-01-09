@@ -77,7 +77,7 @@ module wt_dcache_mem #(
   input wbuffer_t             [DCACHE_WBUF_DEPTH-1:0]       wbuffer_data_i,
 
   //output to predictor
-  output logic		      [1:0]		            pred_outcome_o,
+  output logic		      [3:0]		            pred_outcome_o,
   output logic		      [13:0]			    pred_hit_shct_o, //signature that hitted
   output logic		      [1:0][13:0]		    pred_miss_shct_o, //signature that missed
 
