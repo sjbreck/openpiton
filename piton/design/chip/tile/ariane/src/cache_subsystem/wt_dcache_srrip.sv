@@ -65,247 +65,116 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 		tmp3_2[i] = his2[i]+3;
 		tmp3_3[i] = his3[i]+3;
 		if(srrip_miss_i && (srrip_miss_idx_i == i))begin
-			/*if(pred_result_i == 0)begin//place new line as srrip
-				if(his0[i] == 3)begin
-					srrip_array_d[i][0] = 3;
-					srrip_array_d[i][1] = his1[i];
-					srrip_array_d[i][2] = his2[i];
-					srrip_array_d[i][3] = his3[i];
-					srrip_way[i] = 0;	
-				end
-				else if(his1[i] == 3)begin
-					srrip_array_d[i][0] = his0[i];
-					srrip_array_d[i][1] = 3;
-					srrip_array_d[i][2] = his2[i];
-					srrip_array_d[i][3] = his3[i];	
-					srrip_way[i] = 1;
-				end
-				else if(his2[i] == 3)begin
-					srrip_array_d[i][0] = his0[i];
-					srrip_array_d[i][1] = his1[i];
-					srrip_array_d[i][2] = 3;
-					srrip_array_d[i][3] = his3[i];	
-					srrip_way[i] = 2;
-				end
-				else if(his3[i] == 3)begin
-					srrip_array_d[i][0] = his0[i];
-					srrip_array_d[i][1] = his1[i];
-					srrip_array_d[i][2] = his2[i];
-					srrip_array_d[i][3] = 3;	
-					srrip_way[i] = 3;
-				end
-				else begin
-					if(tmp1_0[i]==3 || tmp1_1[i]==3 || tmp1_2[i]==3 || tmp1_3[i]==3)
-					begin
-						srrip_array_d[i][0] = tmp1_0[i];
-						srrip_array_d[i][1] = tmp1_1[i];
-						srrip_array_d[i][2] = tmp1_2[i];
-						srrip_array_d[i][3] = tmp1_3[i];
-						srrip_way[i] = (tmp1_0[i]==3)?0:
-							      (tmp1_1[i]==3)?1:
-							      (tmp1_2[i]==3)?2:
-							      (tmp1_3[i]==3)?3:0;		
-					end
-					else if(tmp2_0[i]==3 || tmp2_1[i]==3 || tmp2_2[i]==3 || tmp2_3[i]==3)
-					begin
-						srrip_array_d[i][0] = tmp2_0[i];
-						srrip_array_d[i][1] = tmp2_1[i];
-						srrip_array_d[i][2] = tmp2_2[i];
-						srrip_array_d[i][3] = tmp2_3[i];		
-						srrip_way[i] = (tmp2_0[i]==3)?0:
-							      (tmp2_1[i]==3)?1:
-							      (tmp2_2[i]==3)?2:
-							      (tmp2_3[i]==3)?3:0;		
-					end
-					else begin
-						srrip_array_d[i][0] = tmp3_0[i];
-						srrip_array_d[i][1] = tmp3_1[i];
-						srrip_array_d[i][2] = tmp3_2[i];
-						srrip_array_d[i][3] = tmp3_3[i];		
-						srrip_way[i] = (tmp3_0[i]==3)?0:
-							      (tmp3_1[i]==3)?1:
-							      (tmp3_2[i]==3)?2:
-							      (tmp3_3[i]==3)?3:0;		
-					end
-				end	
+			if(his0[i] == 3)begin
+				srrip_array_d[i][0] = 2'd2;
+				srrip_array_d[i][1] = his1[i];
+				srrip_array_d[i][2] = his2[i];
+				srrip_array_d[i][3] = his3[i];	
+				srrip_way[i] = 2'd0;
 			end
-			else if (pred_result_i == 3) 
-		        begin
-				if(his0[i] == 3)begin
-					srrip_array_d[i][0] = 0;
-					srrip_array_d[i][1] = his1[i];
-					srrip_array_d[i][2] = his2[i];
-					srrip_array_d[i][3] = his3[i];	
-					srrip_way[i] = 0;
+			else if(his1[i] == 3)begin
+				srrip_array_d[i][0] = his0[i];
+				srrip_array_d[i][1] = 2'd2;
+				srrip_array_d[i][2] = his2[i];
+				srrip_array_d[i][3] = his3[i];
+				srrip_way[i] = 2'd1;	
+			end
+			else if(his2[i] == 3)begin
+				srrip_array_d[i][0] = his0[i];
+				srrip_array_d[i][1] = his1[i];
+				srrip_array_d[i][2] = 2'd2;
+				srrip_array_d[i][3] = his3[i];	
+				srrip_way[i] = 2'd2;
+			end
+			else if(his3[i] == 3)begin
+				srrip_array_d[i][0] = his0[i];
+				srrip_array_d[i][1] = his1[i];
+				srrip_array_d[i][2] = his2[i];
+				srrip_array_d[i][3] = 2'd2;
+				srrip_way[i] = 2'd3;	
+			end
+			else begin
+				if(tmp1_0[i]==3 || tmp1_1[i]==3 || tmp1_2[i]==3 || tmp1_3[i]==3)
+				begin
+					srrip_array_d[i][0] = (tmp1_0[i]==3)? 2'd2 : tmp1_0[i];
+					srrip_array_d[i][1] = (tmp1_0[i]!=3 && tmp1_1[i]==3)? 2'd2 : tmp1_1[i];
+					srrip_array_d[i][2] = (tmp1_0[i]!=3 && tmp1_1[i]!=3 && tmp1_2[i] == 3)? 2'd2 : tmp1_2[i];
+					srrip_array_d[i][3] = (tmp1_0[i]!=3 && tmp1_1[i]!=3 && tmp1_2[i]!=3 && tmp1_3[i]==3)? 2'd2 : tmp1_3[i];
+					srrip_way[i] = (tmp1_0[i]==3)? 2'd0:
+						       (tmp1_1[i]==3)? 2'd1:
+						       (tmp1_2[i]==3)? 2'd2:
+						       (tmp1_3[i]==3)? 2'd3:0;		
 				end
-				else if(his1[i] == 3)begin
-					srrip_array_d[i][0] = his0[i];
-					srrip_array_d[i][1] = 0;
-					srrip_array_d[i][2] = his2[i];
-					srrip_array_d[i][3] = his3[i];
-					srrip_way[i] = 1;	
-				end
-				else if(his2[i] == 3)begin
-					srrip_array_d[i][0] = his0[i];
-					srrip_array_d[i][1] = his1[i];
-					srrip_array_d[i][2] = 0;
-					srrip_array_d[i][3] = his3[i];	
-					srrip_way[i] = 2;
-				end
-				else if(his3[i] == 3)begin
-					srrip_array_d[i][0] = his0[i];
-					srrip_array_d[i][1] = his1[i];
-					srrip_array_d[i][2] = his2[i];
-					srrip_array_d[i][3] = 0;
-					srrip_way[i] = 3;	
-				end
-				else begin
-					if(tmp1_0[i]==3 || tmp1_1[i]==3 || tmp1_2[i]==3 || tmp1_3[i]==3)
-					begin
-						srrip_array_d[i][0] = (tmp1_0[i]==3)? 0 : tmp1_0[i];
-						srrip_array_d[i][1] = (tmp1_0[i]!=3 && tmp1_1[i]==3)? 0 : tmp1_1[i];
-						srrip_array_d[i][2] = (tmp1_0[i]!=3 && tmp1_1[i]!=3 && tmp1_2[i] == 3)? 0 : tmp1_2[i];
-						srrip_array_d[i][3] = (tmp1_0[i]!=3 && tmp1_1[i]!=3 && tmp1_2[i]!=3 && tmp1_3[i]==3)? 0 : tmp1_3[i];
-						srrip_way[i] = (tmp1_0[i]==3)?0:
-							       (tmp1_1[i]==3)?1:
-							       (tmp1_2[i]==3)?2:
-							       (tmp1_3[i]==3)?3:0;		
-					end
-					else if(tmp2_0[i]==3 || tmp2_1[i]==3 || tmp2_2[i]==3 || tmp2_3[i]==3)
-					begin
-						srrip_array_d[i][0] = (tmp2_0[i]==3)? 0 : tmp2_0[i];
-						srrip_array_d[i][1] = (tmp2_0[i]!=3 && tmp2_1[i]==3)? 0 : tmp2_1[i];
-						srrip_array_d[i][2] = (tmp2_0[i]!=3 && tmp2_1[i]!=3 && tmp2_2[i] == 3)? 0 : tmp2_2[i];
-						srrip_array_d[i][3] = (tmp2_0[i]!=3 && tmp2_1[i]!=3 && tmp2_2[i]!=3 && tmp2_3[i]==3)? 0 : tmp2_3[i];
-						srrip_way[i] = (tmp2_0[i]==3)?0:
-							       (tmp2_1[i]==3)?1:
-							       (tmp2_2[i]==3)?2:
-							       (tmp2_3[i]==3)?3:0;		
-					end
-					else begin
-						srrip_array_d[i][0] = (tmp3_0[i]==3)? 0 : tmp3_0[i];
-						srrip_array_d[i][1] = (tmp3_0[i]!=3 && tmp3_1[i]==3)? 0 : tmp3_1[i];
-						srrip_array_d[i][2] = (tmp3_0[i]!=3 && tmp3_1[i]!=3 && tmp3_2[i] == 3)? 0 : tmp3_2[i];
-						srrip_array_d[i][3] = (tmp3_0[i]!=3 && tmp3_1[i]!=3 && tmp3_2[i]!=3 && tmp3_3[i]==3)? 0 : tmp3_3[i];
-						srrip_way[i] = (tmp3_0[i]==3)?0:
-							       (tmp3_1[i]==3)?1:
-							       (tmp3_2[i]==3)?2:
-							       (tmp3_3[i]==3)?3:0;		
-					end
-				end	
-		        end
-			else begin*/
-				if(his0[i] == 3)begin
-					srrip_array_d[i][0] = 2;
-					srrip_array_d[i][1] = his1[i];
-					srrip_array_d[i][2] = his2[i];
-					srrip_array_d[i][3] = his3[i];	
-					srrip_way[i] = 0;
-				end
-				else if(his1[i] == 3)begin
-					srrip_array_d[i][0] = his0[i];
-					srrip_array_d[i][1] = 2;
-					srrip_array_d[i][2] = his2[i];
-					srrip_array_d[i][3] = his3[i];
-					srrip_way[i] = 1;	
-				end
-				else if(his2[i] == 3)begin
-					srrip_array_d[i][0] = his0[i];
-					srrip_array_d[i][1] = his1[i];
-					srrip_array_d[i][2] = 2;
-					srrip_array_d[i][3] = his3[i];	
-					srrip_way[i] = 2;
-				end
-				else if(his3[i] == 3)begin
-					srrip_array_d[i][0] = his0[i];
-					srrip_array_d[i][1] = his1[i];
-					srrip_array_d[i][2] = his2[i];
-					srrip_array_d[i][3] = 2;
-					srrip_way[i] = 3;	
+				else if(tmp2_0[i]==3 || tmp2_1[i]==3 || tmp2_2[i]==3 || tmp2_3[i]==3)
+				begin
+					srrip_array_d[i][0] = (tmp2_0[i]==3)? 2'd2 : tmp2_0[i];
+					srrip_array_d[i][1] = (tmp2_0[i]!=3 && tmp2_1[i]==3)? 2'd2 : tmp2_1[i];
+					srrip_array_d[i][2] = (tmp2_0[i]!=3 && tmp2_1[i]!=3 && tmp2_2[i] == 3)? 2'd2 : tmp2_2[i];
+					srrip_array_d[i][3] = (tmp2_0[i]!=3 && tmp2_1[i]!=3 && tmp2_2[i]!=3 && tmp2_3[i]==3)? 2'd2 : tmp2_3[i];
+					srrip_way[i] = (tmp2_0[i]==3)? 2'd0:
+						       (tmp2_1[i]==3)? 2'd1:
+						       (tmp2_2[i]==3)? 2'd2:
+						       (tmp2_3[i]==3)? 2'd3:'0;		
 				end
 				else begin
-					if(tmp1_0[i]==3 || tmp1_1[i]==3 || tmp1_2[i]==3 || tmp1_3[i]==3)
-					begin
-						srrip_array_d[i][0] = (tmp1_0[i]==3)? 2 : tmp1_0[i];
-						srrip_array_d[i][1] = (tmp1_0[i]!=3 && tmp1_1[i]==3)? 2 : tmp1_1[i];
-						srrip_array_d[i][2] = (tmp1_0[i]!=3 && tmp1_1[i]!=3 && tmp1_2[i] == 3)? 2 : tmp1_2[i];
-						srrip_array_d[i][3] = (tmp1_0[i]!=3 && tmp1_1[i]!=3 && tmp1_2[i]!=3 && tmp1_3[i]==3)? 2 : tmp1_3[i];
-						srrip_way[i] = (tmp1_0[i]==3)?0:
-							       (tmp1_1[i]==3)?1:
-							       (tmp1_2[i]==3)?2:
-							       (tmp1_3[i]==3)?3:0;		
-					end
-					else if(tmp2_0[i]==3 || tmp2_1[i]==3 || tmp2_2[i]==3 || tmp2_3[i]==3)
-					begin
-						srrip_array_d[i][0] = (tmp2_0[i]==3)? 2 : tmp2_0[i];
-						srrip_array_d[i][1] = (tmp2_0[i]!=3 && tmp2_1[i]==3)? 2 : tmp2_1[i];
-						srrip_array_d[i][2] = (tmp2_0[i]!=3 && tmp2_1[i]!=3 && tmp2_2[i] == 3)? 2 : tmp2_2[i];
-						srrip_array_d[i][3] = (tmp2_0[i]!=3 && tmp2_1[i]!=3 && tmp2_2[i]!=3 && tmp2_3[i]==3)? 2 : tmp2_3[i];
-						srrip_way[i] = (tmp2_0[i]==3)?0:
-							       (tmp2_1[i]==3)?1:
-							       (tmp2_2[i]==3)?2:
-							       (tmp2_3[i]==3)?3:0;		
-					end
-					else begin
-						srrip_array_d[i][0] = (tmp3_0[i]==3)? 2 : tmp3_0[i];
-						srrip_array_d[i][1] = (tmp3_0[i]!=3 && tmp3_1[i]==3)? 2 : tmp3_1[i];
-						srrip_array_d[i][2] = (tmp3_0[i]!=3 && tmp3_1[i]!=3 && tmp3_2[i] == 3)? 2 : tmp3_2[i];
-						srrip_array_d[i][3] = (tmp3_0[i]!=3 && tmp3_1[i]!=3 && tmp3_2[i]!=3 && tmp3_3[i]==3)? 2 : tmp3_3[i];
-						srrip_way[i] = (tmp3_0[i]==3)?0:
-							       (tmp3_1[i]==3)?1:
-							       (tmp3_2[i]==3)?2:
-							       (tmp3_3[i]==3)?3:0;		
-					end
-				end	
-			//end
+					srrip_array_d[i][0] = (tmp3_0[i]==3)? 2'd2 : tmp3_0[i];
+					srrip_array_d[i][1] = (tmp3_0[i]!=3 && tmp3_1[i]==3)? 2'd2 : tmp3_1[i];
+					srrip_array_d[i][2] = (tmp3_0[i]!=3 && tmp3_1[i]!=3 && tmp3_2[i] == 3)? 2'd2 : tmp3_2[i];
+					srrip_array_d[i][3] = (tmp3_0[i]!=3 && tmp3_1[i]!=3 && tmp3_2[i]!=3 && tmp3_3[i]==3)? 2'd2 : tmp3_3[i];
+					srrip_way[i] = (tmp3_0[i]==3)? 2'd0:
+						       (tmp3_1[i]==3)? 2'd1:
+						       (tmp3_2[i]==3)? 2'd2:
+						       (tmp3_3[i]==3)? 2'd3:0;		
+				end
+			end	
 		end
 		else if(i==srrip_hit_idx_i && srrip_hit_i)begin
-			srrip_way[i] = (his0[i]==3)?0:
-				       (his1[i]==3)?1:
-				       (his2[i]==3)?2:
-				       (his3[i]==3)?3:
-				       (his0[i]==2)?0:		
-				       (his1[i]==2)?1:		
-				       (his2[i]==2)?2:		
-				       (his3[i]==2)?3:		
-				       (his0[i]==1)?0:		
-				       (his1[i]==1)?1:		
-				       (his2[i]==1)?2:		
-				       (his3[i]==1)?3:		
-				       (his0[i]==0)?0:		
-				       (his1[i]==0)?1:		
-				       (his2[i]==0)?2:		
-				       (his3[i]==0)?3:0;		
+			srrip_way[i] = (his0[i]==3)? 2'd0:
+				       (his1[i]==3)? 2'd1:
+				       (his2[i]==3)? 2'd2:
+				       (his3[i]==3)? 2'd3:
+				       (his0[i]==2)? 2'd0:		
+				       (his1[i]==2)? 2'd1:		
+				       (his2[i]==2)? 2'd2:		
+				       (his3[i]==2)? 2'd3:		
+				       (his0[i]==1)? 2'd0:		
+				       (his1[i]==1)? 2'd1:		
+				       (his2[i]==1)? 2'd2:		
+				       (his3[i]==1)? 2'd3:		
+				       (his0[i]==0)? 2'd0:		
+				       (his1[i]==0)? 2'd1:		
+				       (his2[i]==0)? 2'd2:		
+				       (his3[i]==0)? 2'd3:'0;		
 			if(srrip_hit_way_i == 0)begin
-				srrip_array_d[i][0] = 0;
+				srrip_array_d[i][0] = 2'd0;
 				srrip_array_d[i][1] = his1[i];
 				srrip_array_d[i][2] = his2[i];
 				srrip_array_d[i][3] = his3[i];	
 			end
 			else if(srrip_hit_way_i == 1)begin
 				srrip_array_d[i][0] = his0[i];
-				srrip_array_d[i][1] = 0;
+				srrip_array_d[i][1] = 2'd0;
 				srrip_array_d[i][2] = his2[i];
 				srrip_array_d[i][3] = his3[i];	
 			end	
 			else if(srrip_hit_way_i == 2)begin
 				srrip_array_d[i][0] = his0[i];
 				srrip_array_d[i][1] = his1[i];
-				srrip_array_d[i][2] = 0;
+				srrip_array_d[i][2] = 2'd0;
 				srrip_array_d[i][3] = his3[i];
 			end				
 			else if(srrip_hit_way_i == 3)begin
 				srrip_array_d[i][0] = his0[i];
 				srrip_array_d[i][1] = his1[i];
 				srrip_array_d[i][2] = his2[i];
-				srrip_array_d[i][3] = 0;
+				srrip_array_d[i][3] = 2'd0;
 			end				
 			else begin
 				srrip_array_d[i] = srrip_array_q[i];
 			end
 		 end
 		 else begin
-			srrip_way[i] = 0;
+			srrip_way[i] = '0;
 			srrip_array_d[i] = srrip_array_q[i];
 		 end
 	end
@@ -316,10 +185,10 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs
 	always_ff @(negedge rst_ni or posedge clk_i) begin: gen_reg_arrays
 		if(!rst_ni || flush_i)begin
 			//initially, way 0 is srrip, way 3 is mru
-			srrip_array_q[i][0]<=3;
-			srrip_array_q[i][1]<=3;
-			srrip_array_q[i][2]<=3;
-			srrip_array_q[i][3]<=3;
+			srrip_array_q[i][0]<=2'd3;
+			srrip_array_q[i][1]<=2'd3;
+			srrip_array_q[i][2]<=2'd3;
+			srrip_array_q[i][3]<=2'd3;
 		end
 		else begin
 			srrip_array_q[i] <= srrip_array_d[i];

@@ -43,37 +43,37 @@ module wt_dcache_predictor #(
       sat_counter_miss[2] = shct_q[pred_miss_shct_i[2]];
       sat_counter_miss[3] = shct_q[pred_miss_shct_i[3]];
       if(pred_hit_i)begin
-	 if(sat_counter_hit==3) shct_d[pred_hit_shct_i] = 3;
-	 else shct_d[pred_hit_shct_i] = sat_counter_hit + 1;
+	 if(sat_counter_hit==3) shct_d[pred_hit_shct_i] = 2'd3;
+	 else shct_d[pred_hit_shct_i] = sat_counter_hit + 2'd1;
       end
       else begin
 	 shct_d[pred_hit_shct_i] = sat_counter_hit;
       end
       if(pred_miss_i)begin
 	 if(pred_miss_way_i[0] && pred_outcome_i[0] == 0)begin
-		if(sat_counter_miss[0] == 0) shct_d[pred_miss_shct_i[0]] = 0;
-	 	else shct_d[pred_miss_shct_i[0]] = sat_counter_miss[0] - 1;
+		if(sat_counter_miss[0] == 0) shct_d[pred_miss_shct_i[0]] = 2'd0;
+	 	else shct_d[pred_miss_shct_i[0]] = sat_counter_miss[0] - 2'd1;
 	 end
 	 else begin
 		shct_d[pred_miss_shct_i[0]] = sat_counter_miss[0];
 	 end
 	 if(pred_miss_way_i[1] && pred_outcome_i[1] == 0)begin
-		if(sat_counter_miss[1] == 0) shct_d[pred_miss_shct_i[1]] = 0;
-	 	else shct_d[pred_miss_shct_i[1]] = sat_counter_miss[1] - 1;
+		if(sat_counter_miss[1] == 0) shct_d[pred_miss_shct_i[1]] = 2'd0;
+	 	else shct_d[pred_miss_shct_i[1]] = sat_counter_miss[1] - 2'd1;
 	 end
 	 else begin
 		shct_d[pred_miss_shct_i[1]] = sat_counter_miss[1];
 	 end
 	 if(pred_miss_way_i[2] && pred_outcome_i[2] == 0)begin
-		if(sat_counter_miss[2] == 0) shct_d[pred_miss_shct_i[2]] = 0;
-	 	else shct_d[pred_miss_shct_i[2]] = sat_counter_miss[2] - 1;
+		if(sat_counter_miss[2] == 0) shct_d[pred_miss_shct_i[2]] = 2'd0;
+	 	else shct_d[pred_miss_shct_i[2]] = sat_counter_miss[2] - 2'd1;
 	 end
 	 else begin
 		shct_d[pred_miss_shct_i[2]] = sat_counter_miss[2];
 	 end
 	 if(pred_miss_way_i[3] && pred_outcome_i[3] == 0)begin
-		if(sat_counter_miss[3] == 0) shct_d[pred_miss_shct_i[3]] = 0;
-	 	else shct_d[pred_miss_shct_i[3]] = sat_counter_miss[3] - 1;
+		if(sat_counter_miss[3] == 0) shct_d[pred_miss_shct_i[3]] = 2'd0;
+	 	else shct_d[pred_miss_shct_i[3]] = sat_counter_miss[3] - 2'd1;
 	 end
 	 else begin
 		shct_d[pred_miss_shct_i[3]] = sat_counter_miss[3];
@@ -90,7 +90,7 @@ module wt_dcache_predictor #(
  for (genvar i=0; i< 16384; i++) begin: gen_ffs
 	always_ff @ (posedge clk_i or negedge rst_ni)begin:ff_shct
 		if(!rst_ni || flush_i)begin
-			shct_q[i] <= 3;
+			shct_q[i] <= 2'd3;
 		end
 		else begin
 			shct_q[i] <= shct_d[i];

@@ -192,6 +192,7 @@ module ptw #(
                     itlb_miss_o         = 1'b1;
                 // we got an DTLB miss
                 end else if (en_ld_st_translation_i & dtlb_access_i & ~dtlb_hit_i) begin
+		    signature_n         = signature_i;
                     ptw_pptr_n          = {satp_ppn_i, dtlb_vaddr_i[38:30], 3'b0};
                     tlb_update_asid_n   = asid_i;
                     vaddr_n             = dtlb_vaddr_i;
@@ -207,7 +208,6 @@ module ptw #(
                 if (req_port_i.data_gnt) begin
                     // send the tag valid signal one cycle later
                     tag_valid_n = 1'b1;
-		    signature_n = signature_i;
                     state_d     = PTE_LOOKUP;
                 end
             end

@@ -77,9 +77,9 @@ module wt_dcache_mem #(
   input wbuffer_t             [DCACHE_WBUF_DEPTH-1:0]       wbuffer_data_i,
 
   //output to predictor
-  output logic		      [3:0]		            pred_outcome_o,
+  output logic		      [3:0]  		            pred_outcome_o,
   output logic		      [13:0]			    pred_hit_shct_o, //signature that hitted
-  output logic		      [3:0][13:0]		    pred_miss_shct_o, //signature that missed
+  output logic		      [3:0][13:0]    		    pred_miss_shct_o, //signature that missed
 
   //output to policies
   output logic						    hit_o,
@@ -170,11 +170,11 @@ logic update_outcome_on_miss[DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_outcome_idxs_bool
 	for(genvar j=0; j<DCACHE_SET_ASSOC; j++)begin: gen_ways_bool
 
-		assign update_outcome_on_hit[i][j] = (hit_way_o == j) && (hit_idx_o==i); 
+		assign update_outcome_on_hit[i][j] = (hit_o) && (hit_way_o == j) && (hit_idx_o==i); 
 		assign update_outcome_on_miss[i][j] = (wr_cl_vld_i && (wr_cl_idx_i==i) && 
-							(wr_cl_we_i[i]))? 1 : 0;
-		assign outcome_d[i][j] = update_outcome_on_hit[i][j] ? 1'b1 : 
-                                         update_outcome_on_miss[i][j] ? 1'b0 : outcome_q[i][j];
+							(wr_cl_we_i[j]))? 1'b1 : 1'b0;
+		assign outcome_d[i][j] = update_outcome_on_hit[i][j] ? 1'b1 :
+                            		(update_outcome_on_miss[i][j] ? 1'b0 : outcome_q[i][j]);
 	end
 end
 

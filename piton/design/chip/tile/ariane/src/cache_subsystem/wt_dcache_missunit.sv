@@ -78,9 +78,9 @@ module wt_dcache_missunit #(
   output dcache_req_t                                mem_data_o,
  
   // predictor interface
-  input  logic [3:0]				     pred_outcome_i,
+  input  logic [3:0]  				     pred_outcome_i,
   input  logic [13:0]      			     pred_hit_shct_i,
-  input  logic [3:0][13:0]			     pred_miss_shct_i,
+  input  logic [3:0][13:0]   			     pred_miss_shct_i,
 
   //input to lru
   input logic					     hit_i,
@@ -172,7 +172,7 @@ module wt_dcache_missunit #(
  logic pred_miss;
  assign pred_miss = wr_cl_vld_o;//flush_en || inv_vld || inv_vld_all || (cl_write_en && mshr_q.all_ways_valid);
  assign signature = miss_signature_i[miss_port_idx];
-//assign signature = {miss_paddr_i[miss_port_idx][DCACHE_OFFSET_WIDTH+6:DCACHE_OFFSET_WIDTH], miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH+6:DCACHE_INDEX_WIDTH]};
+ //assign signature = {miss_paddr_i[miss_port_idx][DCACHE_OFFSET_WIDTH+6:DCACHE_OFFSET_WIDTH], miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH+6:DCACHE_INDEX_WIDTH]};
   logic [3:0] pred_miss_way;
   assign pred_miss_way   = (flush_en   )  ? '1                                    :
                            (inv_vld_all)   ? '1                                    :
@@ -222,19 +222,7 @@ wt_dcache_predictor #(
 
   logic [DCACHE_CL_IDX_WIDTH-1:0] miss_idx;
   assign miss_idx = miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH];
-  /*wt_dcache_lru(
-    .clk_i	    ( clk_i       	),
-    .rst_ni	    ( rst_ni      	),
-    .flush_i	    ( flush_i      	),
-    .lru_hit_i	    ( lru_hit_i   	),
-    .lru_hit_idx_i  ( lru_hit_idx_i     ),
-    .lru_hit_way_i  ( lru_hit_way_i     ),
-    .lru_miss_i	    ( write_signature_o ),
-    .lru_miss_idx_i ( wr_cl_idx_o       ),
-    .pred_result_i  ( pred_result       ),
-    .lru_way_o      ( lru_way		)
-  );
-  wt_dcache_plru(
+  /*wt_dcache_plru(
     .clk_i	     ( clk_i       	 ),
     .rst_ni	     ( rst_ni      	 ),
     .flush_i	     ( flush_i      	 ),
@@ -246,7 +234,19 @@ wt_dcache_predictor #(
     .pred_result_i   ( pred_result       ),
     .plru_way_o      ( plru_way		 )
   );*/
-  wt_dcache_srrip(
+  wt_dcache_plru_ship(
+    .clk_i	     ( clk_i       	 ),
+    .rst_ni	     ( rst_ni      	 ),
+    .flush_i	     ( flush_i      	 ),
+    .plru_hit_i	     ( lru_hit_i   	 ),
+    .plru_hit_idx_i  ( lru_hit_idx_i     ),
+    .plru_hit_way_i  ( lru_hit_way_i     ),
+    .plru_miss_i     ( write_signature_o ),
+    .plru_miss_idx_i ( wr_cl_idx_o       ),
+    .pred_result_i   ( pred_result       ),
+    .plru_way_o      ( plru_way		 )
+  );
+  /*wt_dcache_srrip(
     .clk_i	      ( clk_i       	  ),
     .rst_ni	      ( rst_ni      	  ),
     .flush_i	      ( flush_i      	  ),
@@ -257,7 +257,19 @@ wt_dcache_predictor #(
     .srrip_miss_i     ( mshr_allocate     ), 
     .pred_result_i    ( pred_result       ),
     .srrip_way_o      ( srrip_way         )
-  );
+  );*/
+  /*wt_dcache_srrip_ship(
+    .clk_i	      ( clk_i       	  ),
+    .rst_ni	      ( rst_ni      	  ),
+    .flush_i	      ( flush_i      	  ),
+    .srrip_hit_i      ( hit_i   	  ),
+    .srrip_hit_idx_i  ( hit_idx_i         ),
+    .srrip_hit_way_i  ( hit_way_i         ),
+    .srrip_miss_idx_i ( miss_idx          ),
+    .srrip_miss_i     ( mshr_allocate     ), 
+    .pred_result_i    ( pred_result       ),
+    .srrip_way_o      ( srrip_way         )
+  );*/
 
   plru #(
     .WAYS ( ariane_pkg::DCACHE_SET_ASSOC )
@@ -295,11 +307,11 @@ wt_dcache_predictor #(
   
   // Only alter size for ports 0 and 1, according with the prediction, port 2 is the write buffer
   assign miss_size        = (miss_nc || miss_port_idx[1]) ? miss_size_i[miss_port_idx] : 
-                                       (full_line_fetch ? 3'b111 : 3'b011);
+                                       (full_line_fetch ? 3'b111 : 3'b111);
   assign {address_tag, address_idx, address_off} = paddr;
 
   // calculate the way to replace
-  assign repl_way                = (all_ways_valid) ? srrip_way : inv_way; 
+  assign repl_way                = (all_ways_valid) ? plru_way : inv_way; 
   assign final_way              = miss_rep_way_vld ? miss_rep_way : repl_way;
 
   // if the response if to upgrade a line that only had one bank, we keep that one valid

@@ -74,7 +74,7 @@ module wt_dcache #(
   logic [63:0]                    wr_data;
   logic [7:0]                     wr_data_be;
   //predictor interface
-  logic	[3:0]			  pred_outcome;
+  logic [3:0]			  pred_outcome;
   logic	[13:0]			  pred_hit_shct;
   logic [3:0][13:0]		  pred_miss_shct;
   //lru interface
