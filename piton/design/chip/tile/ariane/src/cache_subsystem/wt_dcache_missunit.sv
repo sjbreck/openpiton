@@ -219,7 +219,7 @@ wt_dcache_predictor #(
   );
   
   // generate random cacheline index
-  /*lfsr_8bit #(
+  lfsr_8bit #(
     .WIDTH ( ariane_pkg::DCACHE_SET_ASSOC )
   ) i_lfsr_inv (
     .clk_i          ( clk_i       ),
@@ -227,7 +227,7 @@ wt_dcache_predictor #(
     .en_i           ( update_lfsr ),
     .refill_way_oh  (             ),
     .refill_way_bin ( rnd_way     )
-  );*/
+  );
 
   logic [DCACHE_CL_IDX_WIDTH-1:0] miss_idx;
   assign miss_idx = miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH];
@@ -235,33 +235,33 @@ wt_dcache_predictor #(
 ///////////////////////////////////////////////////////
 // PLRU
 ///////////////////////////////////////////////////////
-  /*wt_dcache_plru(
+  wt_dcache_plru(
     .clk_i	     ( clk_i       	 ),
     .rst_ni	     ( rst_ni      	 ),
     .flush_i	     ( flush_i      	 ),
     .plru_hit_i	     ( hit_i   	         ),
     .plru_hit_idx_i  ( hit_idx_i         ),
     .plru_hit_way_i  ( hit_way_i         ),
-    .plru_miss_i     ( write_signature_o ),
-    .plru_miss_idx_i ( wr_cl_idx_o       ),
-    .pred_result_i   ( pred_result       ),
-    .plru_way_o      ( plru_way		 )
-  );*/
-///////////////////////////////////////////////////////
-// PLRU + SHiP
-///////////////////////////////////////////////////////
-  wt_dcache_plru_ship(
-    .clk_i	     ( clk_i       	 ),
-    .rst_ni	     ( rst_ni      	 ),
-    .flush_i	     ( flush_i      	 ),
-    .plru_hit_i	     ( hit_i   	         ),
-    .plru_hit_idx_i  ( hit_idx_i         ),
-    .plru_hit_way_i  ( hit_way_i         ),
-    .plru_miss_i     ( write_signature_o ),
-    .plru_miss_idx_i ( wr_cl_idx_o       ),
+    .plru_miss_i     ( mshr_allocate     ),
+    .plru_miss_idx_i ( miss_idx          ),
     .pred_result_i   ( pred_result       ),
     .plru_way_o      ( plru_way		 )
   );
+///////////////////////////////////////////////////////
+// PLRU + SHiP
+///////////////////////////////////////////////////////
+  /*wt_dcache_plru_ship(
+    .clk_i	     ( clk_i       	 ),
+    .rst_ni	     ( rst_ni      	 ),
+    .flush_i	     ( flush_i      	 ),
+    .plru_hit_i	     ( hit_i   	         ),
+    .plru_hit_idx_i  ( hit_idx_i         ),
+    .plru_hit_way_i  ( hit_way_i         ),
+    .plru_miss_i     ( mshr_allocate     ),
+    .plru_miss_idx_i ( miss_idx          ),
+    .pred_result_i   ( pred_result       ),
+    .plru_way_o      ( plru_way		 )
+  );*/
 ///////////////////////////////////////////////////////
 // SRRIP
 ///////////////////////////////////////////////////////
