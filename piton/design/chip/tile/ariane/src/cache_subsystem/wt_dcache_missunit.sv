@@ -110,7 +110,7 @@ module wt_dcache_missunit #(
   } mshr_t;
 
   mshr_t mshr_d, mshr_q;
-  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, inv_way, rnd_way, lru_way, nru_way, srrip_way, plru_way;
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, rnd_way, lru_way, nru_way, srrip_way, plru_way;
   logic mshr_vld_d, mshr_vld_q, mshr_vld_q1;
   logic mshr_allocate;
   logic update_lfsr, all_ways_valid, miss;
@@ -231,10 +231,23 @@ wt_dcache_predictor #(
 
   logic [DCACHE_CL_IDX_WIDTH-1:0] miss_idx;
   assign miss_idx = miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH];
+  // Replacement policies values supported
+  // 0 - Baseline Random Replacement
+  // 1 - PLRU base (without Prediction)
+  // 2 - PLRU with Prediction
+  // 3 - SRRIP base
+  // 4 - SRRIP with Prediction
+  // 5 - LRU
+  // 6 - NRU
+  localparam REP_POLICY = 2;
+  localparam FINE_GRAIN_ENABLE = 1;
 
+  wire [2:0] fine_grain_size;
+  generate
 ///////////////////////////////////////////////////////
 // PLRU
 ///////////////////////////////////////////////////////
+ if (REP_POLICY == 1) begin : rep_policy_plru
   wt_dcache_plru(
     .clk_i	     ( clk_i       	 ),
     .rst_ni	     ( rst_ni      	 ),
@@ -247,10 +260,13 @@ wt_dcache_predictor #(
     .pred_result_i   ( pred_result       ),
     .plru_way_o      ( plru_way		 )
   );
+  assign rep_way = plru_way;
+end
 ///////////////////////////////////////////////////////
 // PLRU + SHiP
 ///////////////////////////////////////////////////////
-  /*wt_dcache_plru_ship(
+  if (REP_POLICY == 2) begin : rep_policy_plru_ship
+  wt_dcache_plru_ship(
     .clk_i	     ( clk_i       	 ),
     .rst_ni	     ( rst_ni      	 ),
     .flush_i	     ( flush_i      	 ),
@@ -261,11 +277,14 @@ wt_dcache_predictor #(
     .plru_miss_idx_i ( miss_idx          ),
     .pred_result_i   ( pred_result       ),
     .plru_way_o      ( plru_way		 )
-  );*/
+  );
+  assign rep_way = plru_way;
+end
 ///////////////////////////////////////////////////////
 // SRRIP
 ///////////////////////////////////////////////////////
-  /*wt_dcache_srrip(
+  if (REP_POLICY == 3) begin : rep_policy_srrip
+  wt_dcache_srrip(
     .clk_i	      ( clk_i       	  ),
     .rst_ni	      ( rst_ni      	  ),
     .flush_i	      ( flush_i      	  ),
@@ -276,11 +295,14 @@ wt_dcache_predictor #(
     .srrip_miss_i     ( mshr_allocate     ), 
     .pred_result_i    ( pred_result       ),
     .srrip_way_o      ( srrip_way         )
-  );*/
+  );
+  assign rep_way = srrip_way;
+end
 ///////////////////////////////////////////////////////
 // SRRIP + SHiP
 ///////////////////////////////////////////////////////
-  /*wt_dcache_srrip_ship(
+  if (REP_POLICY == 4) begin : rep_policy_srrip_ship
+  wt_dcache_srrip_ship(
     .clk_i	      ( clk_i       	  ),
     .rst_ni	      ( rst_ni      	  ),
     .flush_i	      ( flush_i      	  ),
@@ -291,12 +313,15 @@ wt_dcache_predictor #(
     .srrip_miss_i     ( mshr_allocate     ), 
     .pred_result_i    ( pred_result       ),
     .srrip_way_o      ( srrip_way         )
-  );*/
+  );
+  assign rep_way = srrip_way;
+end
 
 ///////////////////////////////////////////////////////
 // NRU
 ///////////////////////////////////////////////////////
-  /*wt_dcache_nru(
+if (REP_POLICY == 5) begin : rep_policy_nru  
+wt_dcache_nru(
     .clk_i	      ( clk_i       	  ),
     .rst_ni	      ( rst_ni      	  ),
     .flush_i	      ( flush_i      	  ),
@@ -307,17 +332,16 @@ wt_dcache_predictor #(
     .nru_miss_i       ( mshr_allocate     ), 
     .pred_result_i    ( pred_result       ),
     .nru_way_o        ( nru_way         )
-  );*/
+  );
+  assign rep_way = nru_way;
+end
+if (FINE_GRAIN_ENABLE) begin : fine_grain_enabled
+  assign fine_grain_size = 3'b011;
+end else begin : no_fine_grain
+  assign fine_grain_size = 3'b111;
+end
 
- /* plru #(
-    .WAYS ( ariane_pkg::DCACHE_SET_ASSOC )
-  ) u_repl_policy (
-    .clk          ( clk_i       ),
-    .reset_n        ( rst_ni      ),
-    .en             ( update_lfsr ),
-    .evictable_way  ( miss_ever_hit_i[miss_port_idx]),
-    .evict_way_idx  ( rnd_way     )
-  );*/
+endgenerate
 
   logic [DCACHE_TAG_WIDTH-1:0]    address_tag;
   logic [DCACHE_CL_IDX_WIDTH-1:0] address_idx;
@@ -342,15 +366,15 @@ wt_dcache_predictor #(
 
   wire full_line_fetch;
   assign full_line_fetch = |pred_result;
-  
+   
   // Only alter size for ports 0 and 1, according with the prediction, port 2 is the write buffer
   assign miss_size        = (miss_nc || miss_port_idx[1]) ? miss_size_i[miss_port_idx] : 
-                                       (full_line_fetch ? 3'b111 : 3'b111);
+                                       (full_line_fetch ? 3'b111 : fine_grain_size);
   assign {address_tag, address_idx, address_off} = paddr;
 
   // calculate the way to replace
   // Note: to test replacement policies, replace the *_way when all_ways_valid is true
-  assign repl_way                = (all_ways_valid) ? plru_way : inv_way; 
+  assign repl_way               = (all_ways_valid) ? rep_way : inv_way; 
   assign final_way              = miss_rep_way_vld ? miss_rep_way : repl_way;
 
   // if the response if to upgrade a line that only had one bank, we keep that one valid
