@@ -110,7 +110,7 @@ module wt_dcache_missunit #(
   } mshr_t;
 
   mshr_t mshr_d, mshr_q;
-  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, inv_way, rnd_way, lru_way, ,nru_way, srrip_way, plru_way;
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, inv_way, rnd_way, lru_way, nru_way, srrip_way, plru_way;
   logic mshr_vld_d, mshr_vld_q, mshr_vld_q1;
   logic mshr_allocate;
   logic update_lfsr, all_ways_valid, miss;
@@ -219,7 +219,7 @@ wt_dcache_predictor #(
   );
   
   // generate random cacheline index
-  lfsr_8bit #(
+  /*lfsr_8bit #(
     .WIDTH ( ariane_pkg::DCACHE_SET_ASSOC )
   ) i_lfsr_inv (
     .clk_i          ( clk_i       ),
@@ -227,7 +227,7 @@ wt_dcache_predictor #(
     .en_i           ( update_lfsr ),
     .refill_way_oh  (             ),
     .refill_way_bin ( rnd_way     )
-  );
+  );*/
 
   logic [DCACHE_CL_IDX_WIDTH-1:0] miss_idx;
   assign miss_idx = miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH];
