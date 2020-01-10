@@ -2,6 +2,7 @@
 // Date: 22.12.2019
 // only works for 4 ways
 // miss return is prioritized over hit b/c cache implemented this way
+// NRU
 
 import ariane_pkg::*;
 import wt_cache_pkg::*;
@@ -42,76 +43,76 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 		his3[i] = nru_array_q[i][3];
 		if(nru_miss_i && (nru_miss_idx_i == i))begin
 			if(his0[i] == 1)begin
-				nru_array_d[i][0] = 1;
+				nru_array_d[i][0] = 1'b1;
 				nru_array_d[i][1] = his1[i];
 				nru_array_d[i][2] = his2[i];
 				nru_array_d[i][3] = his3[i];	
-				nru_way[i] = 0;
+				nru_way[i] = 2'd0;
 			end
 			else if(his1[i] == 1)begin
 				nru_array_d[i][0] = his0[i];
-				nru_array_d[i][1] = 1;
+				nru_array_d[i][1] = 1'b1;
 				nru_array_d[i][2] = his2[i];
 				nru_array_d[i][3] = his3[i];
-				nru_way[i] = 1;	
+				nru_way[i] = 2'd1;	
 			end
 			else if(his2[i] == 1)begin
 				nru_array_d[i][0] = his0[i];
 				nru_array_d[i][1] = his1[i];
-				nru_array_d[i][2] = 1;
+				nru_array_d[i][2] = 1'b1;
 				nru_array_d[i][3] = his3[i];	
-				nru_way[i] = 2;
+				nru_way[i] = 2'd2;
 			end
 			else if(his3[i] == 1)begin
 				nru_array_d[i][0] = his0[i];
 				nru_array_d[i][1] = his1[i];
 				nru_array_d[i][2] = his2[i];
-				nru_array_d[i][3] = 1;
-				nru_way[i] = 3;	
+				nru_array_d[i][3] = 1'b1;
+				nru_way[i] = 2'd3;	
 			end
 			else begin
-				nru_array_d[i][0] = 1;
-				nru_array_d[i][1] = 1;
-				nru_array_d[i][2] = 1;
-				nru_array_d[i][3] = 1;
-				nru_way[i] = 0;
+				nru_array_d[i][0] = 1'b1;
+				nru_array_d[i][1] = 1'b1;
+				nru_array_d[i][2] = 1'b1;
+				nru_array_d[i][3] = 1'b1;
+				nru_way[i] = 2'b0;
 			end	
 		end
 		else if(i==nru_hit_idx_i && nru_hit_i)begin
-			nru_way[i] = (his0[i]==1)?0:
-				     (his1[i]==1)?1:
-				     (his2[i]==1)?2:
-				     (his3[i]==1)?3:0;		
+			nru_way[i] = (his0[i]==1)?2'd0:
+				     (his1[i]==1)?2'd1:
+				     (his2[i]==1)?2'd2:
+				     (his3[i]==1)?2'd3:2'd0;		
 			if(nru_hit_way_i == 0)begin
-				nru_array_d[i][0] = 0;
+				nru_array_d[i][0] = '0;
 				nru_array_d[i][1] = his1[i];
 				nru_array_d[i][2] = his2[i];
 				nru_array_d[i][3] = his3[i];	
 			end
 			else if(nru_hit_way_i == 1)begin
 				nru_array_d[i][0] = his0[i];
-				nru_array_d[i][1] = 0;
+				nru_array_d[i][1] = '0;
 				nru_array_d[i][2] = his2[i];
 				nru_array_d[i][3] = his3[i];	
 			end	
 			else if(nru_hit_way_i == 2)begin
 				nru_array_d[i][0] = his0[i];
 				nru_array_d[i][1] = his1[i];
-				nru_array_d[i][2] = 0;
+				nru_array_d[i][2] = '0;
 				nru_array_d[i][3] = his3[i];
 			end				
 			else if(nru_hit_way_i == 3)begin
 				nru_array_d[i][0] = his0[i];
 				nru_array_d[i][1] = his1[i];
 				nru_array_d[i][2] = his2[i];
-				nru_array_d[i][3] = 0;
+				nru_array_d[i][3] = '0;
 			end				
 			else begin
 				nru_array_d[i] = nru_array_q[i];
 			end
 		 end
 		 else begin
-			nru_way[i] = 0;
+			nru_way[i] = 2'd0;
 			nru_array_d[i] = nru_array_q[i];
 		 end
 	end
@@ -122,10 +123,10 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs
 	always_ff @(negedge rst_ni or posedge clk_i) begin: gen_reg_arrays
 		if(!rst_ni || flush_i)begin
 			//initially, way 0 is nru, way 3 is mru
-			nru_array_q[i][0]<=1;
-			nru_array_q[i][1]<=1;
-			nru_array_q[i][2]<=1;
-			nru_array_q[i][3]<=1;
+			nru_array_q[i][0]<=1'b1;
+			nru_array_q[i][1]<=1'b1;
+			nru_array_q[i][2]<=1'b1;
+			nru_array_q[i][3]<=1'b1;
 		end
 		else begin
 			nru_array_q[i] <= nru_array_d[i];

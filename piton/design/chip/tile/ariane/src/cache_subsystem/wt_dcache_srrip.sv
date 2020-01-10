@@ -2,6 +2,7 @@
 // Date: 22.12.2019
 // only works for 4 ways
 // miss return is prioritized over hit b/c cache implemented this way
+// Described in Detail in the report
 
 import ariane_pkg::*;
 import wt_cache_pkg::*;
@@ -48,11 +49,11 @@ assign srrip_way_o = srrip_way[srrip_miss_idx_i];
 //update srrip array on a hit and a new line
 for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 	always_comb begin: gen_srrip_comb
-		his0[i] = srrip_array_q[i][0]; //his 0 contains the way thats lru	
+		his0[i] = srrip_array_q[i][0]; 	
 		his1[i] = srrip_array_q[i][1];	
 		his2[i] = srrip_array_q[i][2];	
 		his3[i] = srrip_array_q[i][3];
-		tmp1_0[i] = his0[i]+1;
+		tmp1_0[i] = his0[i]+1; 
 		tmp1_1[i] = his1[i]+1;
 		tmp1_2[i] = his2[i]+1;
 		tmp1_3[i] = his3[i]+1;
@@ -65,7 +66,7 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 		tmp3_2[i] = his2[i]+3;
 		tmp3_3[i] = his3[i]+3;
 		if(srrip_miss_i && (srrip_miss_idx_i == i))begin
-			if(his0[i] == 3)begin
+			if(his0[i] == 3)begin // find the first way from the left that has '3'
 				srrip_array_d[i][0] = 2'd2;
 				srrip_array_d[i][1] = his1[i];
 				srrip_array_d[i][2] = his2[i];
@@ -93,8 +94,8 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 				srrip_array_d[i][3] = 2'd2;
 				srrip_way[i] = 2'd3;	
 			end
-			else begin
-				if(tmp1_0[i]==3 || tmp1_1[i]==3 || tmp1_2[i]==3 || tmp1_3[i]==3)
+			else begin // if all ways contains RRPV less than 3:
+				if(tmp1_0[i]==3 || tmp1_1[i]==3 || tmp1_2[i]==3 || tmp1_3[i]==3) //try add 1 and see if any way reaches 3
 				begin
 					srrip_array_d[i][0] = (tmp1_0[i]==3)? 2'd2 : tmp1_0[i];
 					srrip_array_d[i][1] = (tmp1_0[i]!=3 && tmp1_1[i]==3)? 2'd2 : tmp1_1[i];
@@ -105,7 +106,7 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 						       (tmp1_2[i]==3)? 2'd2:
 						       (tmp1_3[i]==3)? 2'd3:0;		
 				end
-				else if(tmp2_0[i]==3 || tmp2_1[i]==3 || tmp2_2[i]==3 || tmp2_3[i]==3)
+				else if(tmp2_0[i]==3 || tmp2_1[i]==3 || tmp2_2[i]==3 || tmp2_3[i]==3) //if not then try adding 2
 				begin
 					srrip_array_d[i][0] = (tmp2_0[i]==3)? 2'd2 : tmp2_0[i];
 					srrip_array_d[i][1] = (tmp2_0[i]!=3 && tmp2_1[i]==3)? 2'd2 : tmp2_1[i];
@@ -116,7 +117,7 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 						       (tmp2_2[i]==3)? 2'd2:
 						       (tmp2_3[i]==3)? 2'd3:'0;		
 				end
-				else begin
+				else begin // then add 3
 					srrip_array_d[i][0] = (tmp3_0[i]==3)? 2'd2 : tmp3_0[i];
 					srrip_array_d[i][1] = (tmp3_0[i]!=3 && tmp3_1[i]==3)? 2'd2 : tmp3_1[i];
 					srrip_array_d[i][2] = (tmp3_0[i]!=3 && tmp3_1[i]!=3 && tmp3_2[i] == 3)? 2'd2 : tmp3_2[i];
@@ -145,7 +146,7 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 				       (his1[i]==0)? 2'd1:		
 				       (his2[i]==0)? 2'd2:		
 				       (his3[i]==0)? 2'd3:'0;		
-			if(srrip_hit_way_i == 0)begin
+			if(srrip_hit_way_i == 0)begin // on hit, RRPV is replaced by '0'
 				srrip_array_d[i][0] = 2'd0;
 				srrip_array_d[i][1] = his1[i];
 				srrip_array_d[i][2] = his2[i];

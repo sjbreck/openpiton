@@ -2,6 +2,8 @@
 // Date: 19.12.2019
 // only works for 4 ways
 // miss return is prioritized over hit b/c cache implemented this way
+// PLRU + SHIP
+// See related comments from PLRU
 
 import ariane_pkg::*;
 import wt_cache_pkg::*;
@@ -44,7 +46,8 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 
 		if(plru_miss_i && (plru_miss_idx_i == i))begin
 			if(pred_result_i == 0)begin//place new line as lru
-				plru_array_d[i] <= his[i];
+				plru_array_d[i] <= his[i]; //if prediction result is distant reference
+                                                           //then don't toggle the pointers
 			end
 			else begin
 				if (his[i] == 3'b000) plru_array_d[i] = {2'b11,his[i][0]};

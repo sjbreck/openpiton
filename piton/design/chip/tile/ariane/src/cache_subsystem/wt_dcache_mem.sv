@@ -125,8 +125,11 @@ module wt_dcache_mem #(
 
   localparam BANK_SIZE_BITS = 3; // a bank is 8 bytes
   localparam BANK_SEL_BITS = $clog2(DCACHE_NUM_BANKS);
+
 ///////////////////////////////////////////////////////
 // Signature Array
+// Signature is brought into register if
+// there is a miss
 ///////////////////////////////////////////////////////
 logic[13:0] sig_array_d [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
 logic[13:0] sig_array_q [DCACHE_NUM_WORDS-1:0][DCACHE_SET_ASSOC-1:0];
@@ -157,6 +160,8 @@ end
 
 ///////////////////////////////////////////////////////
 // Outcome Array
+// Outcome is changed to 1 when receiving a hit
+// outcome is changed back to zero if there is a miss
 ///////////////////////////////////////////////////////
 logic [$clog2(DCACHE_SET_ASSOC)-1:0]  rd_hit_idx;
 assign hit_o = |rd_hit_oh_o;
@@ -191,9 +196,12 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_outcome_ff_idxs
 	end
 end
 
-///////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////
 // Predictor Interface
-///////////////////////////////////////////////////////
+// predictor reads the signatures and outcomes of all ways
+// from the missed index
+// because occassions like flush invalidates all ways in a set
+///////////////////////////////////////////////////////////////
 
 always_comb begin: output_to_predictor
 	if(hit_o)begin

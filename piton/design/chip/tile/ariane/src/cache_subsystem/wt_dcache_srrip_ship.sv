@@ -2,6 +2,8 @@
 // Date: 22.12.2019
 // only works for 4 ways
 // miss return is prioritized over hit b/c cache implemented this way
+// SRRIP SHIP
+// See related comments in SRRIP
 
 import ariane_pkg::*;
 import wt_cache_pkg::*;
@@ -65,7 +67,9 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 		tmp3_2[i] = his2[i]+3;
 		tmp3_3[i] = his3[i]+3;
 		if(srrip_miss_i && (srrip_miss_idx_i == i))begin
-			if(pred_result_i == 0)begin//place new line as srrip
+			if(pred_result_i == 0)begin
+				// if shct entry is 0, meaning a distant re-reference
+                                // then the newly inserted line should be replaces asap, so assign '3'
 				if(his0[i] == 3)begin
 					srrip_array_d[i][0] = 3;
 					srrip_array_d[i][1] = his1[i];
@@ -131,6 +135,9 @@ for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs_comb
 			end
 			else if (pred_result_i == 3) 
 		        begin
+				//if prediction result is a 3, that's a strong
+                                //indication of immediate re-reference
+                                //therefore directly place the block with '0' 
 				if(his0[i] == 3)begin
 					srrip_array_d[i][0] = 0;
 					srrip_array_d[i][1] = his1[i];

@@ -35,7 +35,7 @@ module wt_dcache_missunit #(
   input  amo_req_t                                   amo_req_i,
   output amo_resp_t                                  amo_resp_o,
   // miss handling interface (ld, ptw, wbuffer)
-  input  logic [NumPorts-1:0][13:0]		               miss_signature_i,
+  input  logic [NumPorts-1:0][13:0]		               miss_signature_i, //signature comes in here
   input  logic [NumPorts-1:0]                        miss_req_i,
   output logic [NumPorts-1:0]                        miss_ack_o,
   input  logic [NumPorts-1:0]                        miss_nc_i,
@@ -110,7 +110,7 @@ module wt_dcache_missunit #(
   } mshr_t;
 
   mshr_t mshr_d, mshr_q;
-  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, inv_way, rnd_way, lru_way, srrip_way, plru_way;
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, inv_way, rnd_way, lru_way, ,nru_way, srrip_way, plru_way;
   logic mshr_vld_d, mshr_vld_q, mshr_vld_q1;
   logic mshr_allocate;
   logic update_lfsr, all_ways_valid, miss;
@@ -171,7 +171,8 @@ module wt_dcache_missunit #(
  logic[13:0] signature;
  logic pred_miss;
  assign pred_miss = wr_cl_vld_o;//flush_en || inv_vld || inv_vld_all || (cl_write_en && mshr_q.all_ways_valid);
- assign signature = miss_signature_i[miss_port_idx];
+ assign signature = miss_signature_i[miss_port_idx]; // arbitrate signature
+ //Note: the following line enables signature to be memory based
  //assign signature = {miss_paddr_i[miss_port_idx][DCACHE_OFFSET_WIDTH+6:DCACHE_OFFSET_WIDTH], miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH+6:DCACHE_INDEX_WIDTH]};
   logic [3:0] pred_miss_way;
   assign pred_miss_way   = (flush_en   )  ? '1                                    :
@@ -179,6 +180,14 @@ module wt_dcache_missunit #(
                            (inv_vld    )   ? dcache_way_bin2oh(mem_rtrn_i.inv.way) :
                            (cl_write_en)   ? dcache_way_bin2oh(mshr_q.repl_way)    :
                                              '0;
+///////////////////////////////////////////////////////
+// Predictor
+// Predictor updates SHCT on: Hit (comes from mem)
+// Predictor updates SHCT on: MISS in mshr
+// Predictor predicts: MISS about to enter mshr
+// Result of the predictor can be used to guide 
+// replacement policy and to guide fine grained replacement 
+///////////////////////////////////////////////////////
 wt_dcache_predictor #(
    .Axi64BitCompliant(1'b0),
    .NumPorts(3)
@@ -222,6 +231,10 @@ wt_dcache_predictor #(
 
   logic [DCACHE_CL_IDX_WIDTH-1:0] miss_idx;
   assign miss_idx = miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH];
+
+///////////////////////////////////////////////////////
+// PLRU
+///////////////////////////////////////////////////////
   /*wt_dcache_plru(
     .clk_i	     ( clk_i       	 ),
     .rst_ni	     ( rst_ni      	 ),
@@ -234,6 +247,9 @@ wt_dcache_predictor #(
     .pred_result_i   ( pred_result       ),
     .plru_way_o      ( plru_way		 )
   );*/
+///////////////////////////////////////////////////////
+// PLRU + SHiP
+///////////////////////////////////////////////////////
   wt_dcache_plru_ship(
     .clk_i	     ( clk_i       	 ),
     .rst_ni	     ( rst_ni      	 ),
@@ -246,6 +262,9 @@ wt_dcache_predictor #(
     .pred_result_i   ( pred_result       ),
     .plru_way_o      ( plru_way		 )
   );
+///////////////////////////////////////////////////////
+// SRRIP
+///////////////////////////////////////////////////////
   /*wt_dcache_srrip(
     .clk_i	      ( clk_i       	  ),
     .rst_ni	      ( rst_ni      	  ),
@@ -258,6 +277,9 @@ wt_dcache_predictor #(
     .pred_result_i    ( pred_result       ),
     .srrip_way_o      ( srrip_way         )
   );*/
+///////////////////////////////////////////////////////
+// SRRIP + SHiP
+///////////////////////////////////////////////////////
   /*wt_dcache_srrip_ship(
     .clk_i	      ( clk_i       	  ),
     .rst_ni	      ( rst_ni      	  ),
@@ -271,7 +293,23 @@ wt_dcache_predictor #(
     .srrip_way_o      ( srrip_way         )
   );*/
 
-  plru #(
+///////////////////////////////////////////////////////
+// NRU
+///////////////////////////////////////////////////////
+  /*wt_dcache_nru(
+    .clk_i	      ( clk_i       	  ),
+    .rst_ni	      ( rst_ni      	  ),
+    .flush_i	      ( flush_i      	  ),
+    .nru_hit_i        ( hit_i   	  ),
+    .nru_hit_idx_i    ( hit_idx_i         ),
+    .nru_hit_way_i    ( hit_way_i         ),
+    .nru_miss_idx_i   ( miss_idx          ),
+    .nru_miss_i       ( mshr_allocate     ), 
+    .pred_result_i    ( pred_result       ),
+    .nru_way_o        ( nru_way         )
+  );*/
+
+ /* plru #(
     .WAYS ( ariane_pkg::DCACHE_SET_ASSOC )
   ) u_repl_policy (
     .clk          ( clk_i       ),
@@ -279,7 +317,7 @@ wt_dcache_predictor #(
     .en             ( update_lfsr ),
     .evictable_way  ( miss_ever_hit_i[miss_port_idx]),
     .evict_way_idx  ( rnd_way     )
-  );
+  );*/
 
   logic [DCACHE_TAG_WIDTH-1:0]    address_tag;
   logic [DCACHE_CL_IDX_WIDTH-1:0] address_idx;
@@ -311,6 +349,7 @@ wt_dcache_predictor #(
   assign {address_tag, address_idx, address_off} = paddr;
 
   // calculate the way to replace
+  // Note: to test replacement policies, replace the *_way when all_ways_valid is true
   assign repl_way                = (all_ways_valid) ? plru_way : inv_way; 
   assign final_way              = miss_rep_way_vld ? miss_rep_way : repl_way;
 

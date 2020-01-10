@@ -71,8 +71,12 @@ module load_store_unit #(
 
     // signature generation for request in ex_stage
     logic [13:0] signature;
-    //try out 1: signature as pc
+    //try out 1: signature as instruction sequence
     assign signature = inst_seq_i;
+    //Uncomment one of the following line to try pc based signature or 
+    //a mix of pc and instruction sequence
+    //assign signature = inst_seq_i ^ pc_i[13:0];
+    //assign signature = pc_i[13:0];
 
 
     // data is misaligned
@@ -142,7 +146,7 @@ module load_store_unit #(
         .lsu_exception_o        ( mmu_exception          ),
         .lsu_dtlb_hit_o         ( dtlb_hit               ), // send in the same cycle as the request
         // connecting PTW to D$ IF
-	.signature_i		( lsu_ctrl.signature     ),
+	.signature_i		( lsu_ctrl.signature     ), //signature goes through mmu to ptw and to memory system if load misses 
         .req_port_i             ( dcache_req_ports_i [0] ),
         .req_port_o             ( dcache_req_ports_o [0] ),
         // icache address translation requests
@@ -160,7 +164,7 @@ module load_store_unit #(
         .no_st_pending_o,
 
         .valid_i               ( st_valid_i           ),
-        .lsu_ctrl_i            ( lsu_ctrl             ),
+        .lsu_ctrl_i            ( lsu_ctrl             ), //signature embedded here
         .pop_st_o              ( pop_st               ),
         .commit_i,
         .commit_ready_o,
@@ -183,7 +187,6 @@ module load_store_unit #(
         .amo_req_o,
         .amo_resp_i,
         // to memory arbiter
-        //.signature_i		( signature		 ),
         .req_port_i             ( dcache_req_ports_i [2] ),
         .req_port_o             ( dcache_req_ports_o [2] )
     );
@@ -193,7 +196,7 @@ module load_store_unit #(
     // ------------------
     load_unit i_load_unit (
         .valid_i               ( ld_valid_i           ),
-        .lsu_ctrl_i            ( lsu_ctrl             ),
+        .lsu_ctrl_i            ( lsu_ctrl             ), //signature embedded here
         .pop_ld_o              ( pop_ld               ),
 
         .valid_o               ( ld_valid             ),
@@ -210,7 +213,6 @@ module load_store_unit #(
         .page_offset_o         ( page_offset          ),
         .page_offset_matches_i ( page_offset_matches  ),
         // to memory arbiter
-        //.signature_i	       ( signature		),
         .req_port_i            ( dcache_req_ports_i [1] ),
         .req_port_o            ( dcache_req_ports_o [1] ),
         .*
@@ -368,7 +370,7 @@ module load_store_unit #(
     // ------------------
     // new data arrives here
     lsu_ctrl_t lsu_req_i;
-
+    //signature first enters lsu request 
     assign lsu_req_i = {lsu_valid_i, vaddr_i, fu_data_i.operand_b, be_i, signature, fu_data_i.fu, fu_data_i.operator, fu_data_i.trans_id};
 
     lsu_bypass lsu_bypass_i (
