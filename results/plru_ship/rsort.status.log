@@ -1,0 +1,6 @@
+Diag: build                                      PASS
+Fri Jan 10 11:04:04 EST 2020
+sim.log: 753894500: Simulation -> PASS (HIT GOOD TRAP)
+Cyc=     753894, Sec=   177.500, C/S=4247.3
+ExecCyc=     753894, Sec=   177.500, EC/S=4247.3
+NumTiles=         0

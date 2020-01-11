@@ -218,8 +218,34 @@ wt_dcache_predictor #(
     .empty_o ( all_ways_valid                  )
   );
   
-  // generate random cacheline index
-  /*lfsr_8bit #(
+  logic [DCACHE_CL_IDX_WIDTH-1:0] miss_idx;
+  assign miss_idx = miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH];
+  
+  // To change the replacement policy we only need to select the associated number
+  // Replacement policies values supported
+  // 0 - Baseline Random Replacement
+  // 1 - PLRU base (without Prediction)
+  // 2 - PLRU with Prediction
+  // 3 - SRRIP base
+  // 4 - SRRIP with Prediction
+  // 5 - NRU
+  // 6 - LRU
+
+  localparam REP_POLICY = 4;
+
+  // Enabling the fine grain fetch allows to load a single bank whenever the predictor states that it is likely
+  // that the other bank is not going to be used during the lifetime of the cache line
+  localparam FINE_GRAIN_ENABLE = 1;
+
+  wire [2:0] fine_grain_size;
+  generate
+
+///////////////////////////////////////////////////////
+// PLRU
+///////////////////////////////////////////////////////
+ if (REP_POLICY == 0) begin : rep_policy_random
+    // generate random cacheline index
+  lfsr_8bit #(
     .WIDTH ( ariane_pkg::DCACHE_SET_ASSOC )
   ) i_lfsr_inv (
     .clk_i          ( clk_i       ),
@@ -227,23 +253,10 @@ wt_dcache_predictor #(
     .en_i           ( update_lfsr ),
     .refill_way_oh  (             ),
     .refill_way_bin ( rnd_way     )
-  );*/
+  );
+  assign rep_way = rnd_way;
+end
 
-  logic [DCACHE_CL_IDX_WIDTH-1:0] miss_idx;
-  assign miss_idx = miss_paddr_i[miss_port_idx][DCACHE_INDEX_WIDTH-1:DCACHE_OFFSET_WIDTH];
-  // Replacement policies values supported
-  // 0 - Baseline Random Replacement
-  // 1 - PLRU base (without Prediction)
-  // 2 - PLRU with Prediction
-  // 3 - SRRIP base
-  // 4 - SRRIP with Prediction
-  // 5 - LRU
-  // 6 - NRU
-  localparam REP_POLICY = 2;
-  localparam FINE_GRAIN_ENABLE = 1;
-
-  wire [2:0] fine_grain_size;
-  generate
 ///////////////////////////////////////////////////////
 // PLRU
 ///////////////////////////////////////////////////////
@@ -335,6 +348,26 @@ wt_dcache_nru(
   );
   assign rep_way = nru_way;
 end
+
+///////////////////////////////////////////////////////
+// LRU
+///////////////////////////////////////////////////////
+if (REP_POLICY == 6) begin : rep_policy_lru
+wt_dcache_lru(
+    .clk_i        ( clk_i           ),
+    .rst_ni       ( rst_ni          ),
+    .flush_i        ( flush_i         ),
+    .lru_hit_i        ( hit_i       ),
+    .lru_hit_idx_i    ( hit_idx_i         ),
+    .lru_hit_way_i    ( hit_way_i         ),
+    .lru_miss_idx_i   ( miss_idx          ),
+    .lru_miss_i       ( mshr_allocate     ),
+    .pred_result_i    ( pred_result       ),
+    .lru_way_o        ( lru_way         )
+  );
+  assign rep_way = lru_way;
+end
+
 if (FINE_GRAIN_ENABLE) begin : fine_grain_enabled
   assign fine_grain_size = 3'b011;
 end else begin : no_fine_grain
@@ -373,8 +406,12 @@ endgenerate
   assign {address_tag, address_idx, address_off} = paddr;
 
   // calculate the way to replace
-  // Note: to test replacement policies, replace the *_way when all_ways_valid is true
+  // We select the invalid way first if we see there is any
   assign repl_way               = (all_ways_valid) ? rep_way : inv_way; 
+  // In fine grain mode, if we fetch a part of a line that we previously loaded a single part. We want to
+  // guarantee that the second part is loaded to the same way. We know that because in wt_dcache_mem module we
+  // had a tag hit, but not a cache hit, cause the valid bit if the part line was 0. So it is a miss, but there is 
+ // no eviction cause we just load the rest of the line that was previously half line loaded.
   assign final_way              = miss_rep_way_vld ? miss_rep_way : repl_way;
 
   // if the response if to upgrade a line that only had one bank, we keep that one valid

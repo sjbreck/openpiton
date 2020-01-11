@@ -417,6 +417,11 @@ end
       .rdata_o    ( bank_rdata [k]      )
     );
   end
+
+  // WE MODIFIED THE VALID BITS STORED TOGETHER WITH THE TAG, SO WE HAVE 2 VALID BITS, ONE PER BANK
+  // BANKS_WRITE checks which banks are being loaded. Upgraded signals means that the line had a single bank valid
+  // and it missed in the other one, that resulted in loading the rest of the line. We make sure in wt_dcache_missunit
+  // that the miss writes to the same way where there was a tag hit, but a cache miss, due to the half line loading.
   wire [DCACHE_NUM_BANKS-1:0] banks_write = {wr_cl_data_be_i[8] || wr_cl_line_upgraded_i,
                                              wr_cl_data_be_i[0] || wr_cl_line_upgraded_i};
   for (genvar i = 0; i < DCACHE_SET_ASSOC; i++) begin : gen_tag_srams
@@ -439,7 +444,8 @@ end
       .be_i      ( '1                  ),
       .rdata_o   ( vld_tag_rdata[i]    )
     );
-
+    
+    // WE STORE THE HITS TO SHOW IN THE MONITOR WHICH WAYS WERE EVER HIT
     for (genvar j = 0; j < DCACHE_NUM_WORDS; j++) begin : gen_hit_bits
       wire set_indexed = (j[DCACHE_CL_IDX_WIDTH-1:0] == vld_addr);
       wire set_indexed_q = (j[DCACHE_CL_IDX_WIDTH-1:0] == vld_addr_q);
@@ -496,7 +502,7 @@ end
   wire [4:0] bw_add;
   assign bw_add = {1'b0, {4{wr_cl_data_be_i[0]}} & 4'd8} + {1'b0, {4{wr_cl_data_be_i[8]}} & 4'd8};
   
-
+  // HERE WE ADDED BW_BYTE_COUNT TO COUNT BANDWIDTH BETWEEN ARIANE AND OPENPITON NETWORK
   always_ff @(posedge clk_i or negedge rst_ni) begin : p_mirror
     if(!rst_ni) begin
       vld_mirror <= '{default:'0};

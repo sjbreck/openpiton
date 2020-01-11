@@ -70,6 +70,7 @@ begin
         $display("----MISS: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_miss);
         //$display("rd_tag: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_tag);
         $display("rd_paddr: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_paddr);
+        $display("rd_signature hit: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.pred_hit_shct_o);
         $display("rd_hits: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_ever_hit_o);
         $display("rd_valids: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_vld_bits_o);
         $display("rd_valid_banks: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.rd_vld_bits);
@@ -88,15 +89,22 @@ begin
     end
 
 
-    if (1'b1 && `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_cl_vld_i
-       && |`CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_vld_bits_i)
+    if (1'b1 && `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.cl_write_en)
+       //&& |`CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_vld_bits_i)
     begin
         $display("===WRITE: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_cl_we_i);
         //$display("invalidate: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.inv_vld);
+        $display("wr_signature alloc %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.wr_cl_signature_o);
+        $display("wr_signature miss0 %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.pred_miss_shct_i[0]);
+        $display("wr_signature miss1 %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.pred_miss_shct_i[1]);
+        $display("wr_signature miss2 %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.pred_miss_shct_i[2]);
+        $display("wr_signature miss3 %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.pred_miss_shct_i[3]);
+        $display("wr_outcome ev %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.pred_outcome_i);
         $display("wr_valid_way: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_vld_bits_i);
         $display("wr_paddr: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wbuffer_cmp_addr);
-        $display("wr_data: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_cl_data_i);
+        //$display("wr_data: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_cl_data_i);
         $display("wr_set: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_cl_idx_i);
+        $display("wr_way: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_sig_we_i);
         $display("wr_bytes: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.wr_cl_data_be_i);
         $display("BW_COUNTER: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.bw_byte_count);
         $display("------");
@@ -104,14 +112,13 @@ begin
 
     if (`CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.mshr_allocate)
     begin
-
         $display("+++++MISS_COUNTER L1: %d", `CORE_REF0.ariane.i_perf_counters.perf_dl1);
         $display("m_paddr: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.paddr);
-        //$display("m_addr12: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.addr_12);
-        $display("m_repl_way: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.repl_way);
+        //$display("m_repl_way: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.repl_way);
+        $display("m_prediction new: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.pred_result);
+        $display("m_signature new line: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.signature);
         $display("m_final_way: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.final_way);
         $display("m_valid: %b", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.valid_ways);
-        //$display("m_rep_way: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.rep_way);
         //$display("m_inv_way: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.inv_way);
         $display("m_set: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.address_idx);
         //$display("m_tag: %x", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_missunit.address_tag);
