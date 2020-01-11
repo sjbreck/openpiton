@@ -261,7 +261,7 @@ end
 // PLRU
 ///////////////////////////////////////////////////////
  if (REP_POLICY == 1) begin : rep_policy_plru
-  wt_dcache_plru(
+  wt_dcache_plru plru(
     .clk_i	     ( clk_i       	 ),
     .rst_ni	     ( rst_ni      	 ),
     .flush_i	     ( flush_i      	 ),
@@ -279,7 +279,7 @@ end
 // PLRU + SHiP
 ///////////////////////////////////////////////////////
   if (REP_POLICY == 2) begin : rep_policy_plru_ship
-  wt_dcache_plru_ship(
+  wt_dcache_plru_ship plru_ship(
     .clk_i	     ( clk_i       	 ),
     .rst_ni	     ( rst_ni      	 ),
     .flush_i	     ( flush_i      	 ),
@@ -297,7 +297,7 @@ end
 // SRRIP
 ///////////////////////////////////////////////////////
   if (REP_POLICY == 3) begin : rep_policy_srrip
-  wt_dcache_srrip(
+  wt_dcache_srrip srrip(
     .clk_i	      ( clk_i       	  ),
     .rst_ni	      ( rst_ni      	  ),
     .flush_i	      ( flush_i      	  ),
@@ -315,7 +315,7 @@ end
 // SRRIP + SHiP
 ///////////////////////////////////////////////////////
   if (REP_POLICY == 4) begin : rep_policy_srrip_ship
-  wt_dcache_srrip_ship(
+  wt_dcache_srrip_ship srrip_ship(
     .clk_i	      ( clk_i       	  ),
     .rst_ni	      ( rst_ni      	  ),
     .flush_i	      ( flush_i      	  ),
@@ -334,7 +334,7 @@ end
 // NRU
 ///////////////////////////////////////////////////////
 if (REP_POLICY == 5) begin : rep_policy_nru  
-wt_dcache_nru(
+wt_dcache_nru nru(
     .clk_i	      ( clk_i       	  ),
     .rst_ni	      ( rst_ni      	  ),
     .flush_i	      ( flush_i      	  ),
@@ -353,7 +353,7 @@ end
 // LRU
 ///////////////////////////////////////////////////////
 if (REP_POLICY == 6) begin : rep_policy_lru
-wt_dcache_lru(
+wt_dcache_lru lru(
     .clk_i        ( clk_i           ),
     .rst_ni       ( rst_ni          ),
     .flush_i        ( flush_i         ),

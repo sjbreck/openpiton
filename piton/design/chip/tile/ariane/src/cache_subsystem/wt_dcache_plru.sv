@@ -92,11 +92,7 @@ end
 for(genvar i=0; i<DCACHE_NUM_WORDS; i++)begin: gen_idxs
 	always_ff @(negedge rst_ni or posedge clk_i) begin: gen_reg_arrays
 		if(!rst_ni || flush_i)begin
-			//initially, way 0 is lru, way 3 is mru
-			plru_array_q[i][0]<=0;
-			plru_array_q[i][1]<=1;
-			plru_array_q[i][2]<=2;
-			plru_array_q[i][3]<=3;
+			plru_array_q[i]<='0;
 		end
 		else begin
 			plru_array_q[i] <= plru_array_d[i];
