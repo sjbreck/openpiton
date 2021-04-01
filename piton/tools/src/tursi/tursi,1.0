@@ -406,9 +406,9 @@ def main():
     print_info("y_tiles   = " + str(args.y_tiles))
     print_info("num_tiles = " + str(args.num_tiles))
 
-    os.environ['PTON_X_TILES']   = str(args.x_tiles)
-    os.environ['PTON_Y_TILES']   = str(args.y_tiles)
-    os.environ['PTON_NUM_TILES'] = str(args.num_tiles)
+    os.environ['PITON_X_TILES']   = str(args.x_tiles)
+    os.environ['PITON_Y_TILES']   = str(args.y_tiles)
+    os.environ['PITON_NUM_TILES'] = str(args.num_tiles)
 
     ##################################
     # Set defines to pass as backend args
@@ -416,12 +416,14 @@ def main():
     args.config_rtl.append('NO_SCAN')
 
     if args.fusesoc_core == "openpiton::manycore_tb":
-        args.config_rtl.append('NO_SLAM_RANDOM')
-        args.config_rtl.append('NO_MRA_VAL')
         args.config_rtl.append('PITON_DPI')
 
     # core variant
     print_info("core      = " + str(args.core))
+    for i in range(int(args.num_tiles)):
+        args.config_rtl.append('RTL_TILE' + str(i))
+        print_info('defining RTL_TILE' + str(i))
+
     if args.core == 'pico':
 
         args.config_rtl.append('PITON_PICO')
@@ -447,12 +449,17 @@ def main():
     elif args.core == 'ariane':
         args.config_rtl.append('PITON_ARIANE')
 
+        ## Temporary until we create a solution for SystemVerilog code
+        print_error('Due to lack of support for "pickling" of SystemVerilog code, the Ariane core configuration option is not supported')
+        sys.exit(1)
+
         for i in range(int(args.num_tiles)):
             args.config_rtl.append('RTL_ARIANE' + str(i))
             print_info('defining RTL_ARIANE' + str(i))
 
     elif args.core == 'sparc':
         # this is the default
+        args.config_rtl.append('PITON_OST1')
         for i in range(int(args.num_tiles)):
             args.config_rtl.append('RTL_SPARC' + str(i))
             print_info('defining RTL_SPARC' + str(i))
@@ -467,7 +474,11 @@ def main():
         sys.exit(1)
 
     print_info("network   = " + str(args.network_config))
-    os.environ['PTON_NETWORK_CONFIG'] = args.network_config + "_config"
+    os.environ['PITON_NETWORK_CONFIG'] = args.network_config + "_config"
+
+    if args.network_config == "xbar" and args.y_tiles != 1:
+        print_error('When using the xbar network configuration option the y_tiles need to be set to 1.')
+        sys.exit(1)
 
     # cache config
     print_info("l15 size  = " + str(args.config_l15_size))
@@ -500,7 +511,7 @@ def main():
 
     if do_pickle:
         #print_info("Pickling: %s" % args.core_name)
-        cmd = 'fusesoc --config {} build --target=pickle --tool=icarus {} --iverilog_options="{}"'.format(fusesoc_config_arg, args.fusesoc_core, " ".join(["-D%s " % define for define in args.config_rtl]))
+        cmd = 'fusesoc --config {} run --build --target=pickle --tool=icarus {} --iverilog_options="{}"'.format(fusesoc_config_arg, args.fusesoc_core, " ".join(["-D%s " % define for define in args.config_rtl]))
         print_info(cmd)
         ret_val = os.system(cmd)
         if ret_val != 0:
