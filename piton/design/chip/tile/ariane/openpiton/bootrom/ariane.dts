@@ -1,6 +1,6 @@
 // DTS generated with gen_riscv_dts(...)
 // OpenPiton + Ariane framework
-// Date: Dec 12 2019 17:33:56
+// Date: Apr 14 2021 17:02:18
 
 /dts-v1/;
 
@@ -56,7 +56,7 @@
             current-speed = <115200>;
             interrupt-parent = <&PLIC0>;
             interrupts = <1>;
-            reg-shift = <2>; // regs are spaced on 32 bit boundary
+            reg-shift = <0>; // regs are spaced on 8 bit boundary (modified from Xilinx UART16550 to be ns16550 compatible)
         };
             
         debug-controller@fff1000000 {

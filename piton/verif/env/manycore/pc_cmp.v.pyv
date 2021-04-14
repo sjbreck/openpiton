@@ -490,9 +490,9 @@ always @(posedge clk)begin
                             @(posedge clk);
                             `endif
                             $display("%0d: Simulation -> PASS (HIT GOOD TRAP)", $time);
-                            $display("MISS_COUNTER L1: %d", `CORE_REF0.ariane.i_perf_counters.perf_dl1);
-                            $display("INSTRUCTION COUNT: %d", `CORE_REF0.ariane.issue_stage_i.i_scoreboard.inst_cnt);
-                            $display("BW_COUNTER: %d", `CORE_REF0.ariane.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.bw_byte_count);
+                            $display("MISS_COUNTER L1: %d", `ARIANE_CORE0.i_perf_counters.perf_dl1);
+                            $display("INSTRUCTION COUNT: %d", `ARIANE_CORE0.issue_stage_i.i_scoreboard.inst_cnt);
+                            $display("BW_COUNTER: %d", `ARIANE_CORE0.i_cache_subsystem.i_wt_dcache.i_wt_dcache_mem.bw_byte_count);
                             $finish;
                         end
                     end // if (active_thread[{0}])

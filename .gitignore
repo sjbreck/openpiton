@@ -95,6 +95,8 @@ vivado*.str
 flist
 history.sims
 ucli.key
+piton/design/chip/tile/ariane/tmp/riscv-tests/build/*
+piton/design/chip/tile/ariane/tmp/riscv-tests/build/share/riscv-tests/*
 
 # Ignore temporary pyv files
 *.v.tmp
