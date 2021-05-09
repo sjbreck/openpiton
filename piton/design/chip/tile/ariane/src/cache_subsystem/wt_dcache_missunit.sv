@@ -556,7 +556,7 @@ endgenerate
           end
         end
         DCACHE_INV_REQ: begin
-          inv_vld     = mem_rtrn_i.inv.all;// | mem_rtrn_i.inv.vld;
+          inv_vld     = mem_rtrn_i.inv.all | mem_rtrn_i.inv.vld;
           inv_vld_all = mem_rtrn_i.inv.all;
         end
         // TODO:
