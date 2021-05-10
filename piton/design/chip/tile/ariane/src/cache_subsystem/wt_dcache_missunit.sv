@@ -110,7 +110,7 @@ module wt_dcache_missunit #(
   } mshr_t;
 
   mshr_t mshr_d, mshr_q;
-  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, rnd_way, lru_way, nru_way, srrip_way, plru_way;
+  logic [$clog2(DCACHE_SET_ASSOC)-1:0] repl_way, rep_way, inv_way, rnd_way, lru_way, nru_way, srrip_way, plru_way, store_rnd_way;
   logic mshr_vld_d, mshr_vld_q, mshr_vld_q1;
   logic mshr_allocate;
   logic update_lfsr, all_ways_valid, miss;
@@ -235,9 +235,21 @@ wt_dcache_predictor #(
 
   // Enabling the fine grain fetch allows to load a single bank whenever the predictor states that it is likely
   // that the other bank is not going to be used during the lifetime of the cache line
-  localparam FINE_GRAIN_ENABLE = 1;
+  localparam FINE_GRAIN_ENABLE = 0;
 
   wire [2:0] fine_grain_size;
+
+  // generate random cacheline index
+  lfsr_8bit #(
+    .WIDTH ( ariane_pkg::DCACHE_SET_ASSOC )
+  ) i_lfsr_rand (
+    .clk_i          ( clk_i       ),
+    .rst_ni         ( rst_ni      ),
+    .en_i           ( 1'b1 ),
+    .refill_way_oh  (             ),
+    .refill_way_bin ( store_rnd_way     )
+  );
+
   generate
 
 ///////////////////////////////////////////////////////
@@ -412,7 +424,8 @@ endgenerate
   // guarantee that the second part is loaded to the same way. We know that because in wt_dcache_mem module we
   // had a tag hit, but not a cache hit, cause the valid bit if the part line was 0. So it is a miss, but there is 
  // no eviction cause we just load the rest of the line that was previously half line loaded.
-  assign final_way              = miss_rep_way_vld ? miss_rep_way : repl_way;
+  assign final_way              = (miss_port_idx == NumPorts-1) ? store_rnd_way : 
+                                  (miss_rep_way_vld) ? miss_rep_way : repl_way;
 
   // if the response if to upgrade a line that only had one bank, we keep that one valid
   assign line_upgraded_d        = (mshr_allocate)  ? miss_rep_way_vld : line_upgraded_q;

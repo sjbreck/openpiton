@@ -283,6 +283,11 @@ reg stall_s3;
 reg val_s1; // val_s1 is basically predecode_val_s1, so anything that depends on this...
 reg val_s2;
 reg val_s3;
+localparam CHECK_CONFIG = ((`CONFIG_L1D_SIZE == `CONFIG_L15_SIZE) & 
+                                           (`CONFIG_L15_ASSOCIATIVITY == `CONFIG_L1D_ASSOCIATIVITY) &
+                                           (`CONFIG_L1D_CACHELINE_WIDTH == `L15_CACHELINE_WIDTH)) ? 1 : 0;
+localparam L1_L15_SYNC_ENABLE = 1;
+localparam L1_REPLACEMENT_POLICY_ENABLE = (L1_L15_SYNC_ENABLE & CHECK_CONFIG) ? 1 : 0;
 
 // ack signals
 reg pcx_ack_s1;
@@ -1655,7 +1660,14 @@ begin
                 decoder_wmt_compare_op_s1 = `L15_WMT_COMPARE_LRU;
                 decoder_lruarray_write_op_s1 = `L15_LRU_EVICTION;
                 decoder_lrsc_flag_write_op_s1 = `L15_S2_LRSC_FLAG_CLEAR_LRU_WAY;
-                decoder_cpx_operation_s1 = `L15_CPX_GEN_INVALIDATION_IF_LRU_MES_AND_WAYMAP_VALID;
+
+                // no invalidations for eviction if the replacement ways are the same
+                if (L1_REPLACEMENT_POLICY_ENABLE) begin
+                  decoder_cpx_operation_s1 = 5'b0;
+                end 
+                else begin 
+                 decoder_cpx_operation_s1 = `L15_CPX_GEN_INVALIDATION_IF_LRU_MES_AND_WAYMAP_VALID;
+                end
                 decoder_noc1_operation_s1 = `L15_NOC1_GEN_WRITEBACK_GUARD_IF_LRU_M;
                 decoder_creditman_noc1_needed = 2'd1;
                 decoder_noc3_operation_s1 = `L15_NOC3_GEN_WRITEBACK_IF_LRU_M_FROM_DCACHE;
@@ -2580,6 +2592,10 @@ always @ *
 begin
     lru_used_bits_s2[`L15_WAY_ARRAY_MASK] = lruarray_l15_dout_s2[`L15_LRUARRAY_USED_MASK];
     lru_round_robin_turn_s2[`L15_WAY_MASK] = lruarray_l15_dout_s2[`L15_LRUARRAY_RR_MASK];
+    if (L1_REPLACEMENT_POLICY_ENABLE) begin
+    lru_way_s2[`L15_WAY_MASK] = l1_replacement_way_s2;
+    end 
+    else begin
     lru_way_s2 = 0;
     if (&lru_used_bits_s2 == 1'b1)
     begin
@@ -2619,6 +2635,7 @@ begin
             end
         endcase
     end
+    end 
 end
 
 //////////////////////////////
